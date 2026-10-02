@@ -1,0 +1,200 @@
+version: "1.0"
+sops:
+  - id: "SOP-01"
+    name: "Severe Thunderstorm and Lightning Activity"
+    category: "outdoor_general"
+    activities:
+      - "outdoor sports"
+      - "hiking"
+      - "running"
+      - "swimming"
+      - "golf"
+      - "cycling"
+      - "camping"
+      - "general outdoor"
+    severity: "CRITICAL"
+    priority: 100
+    conditions:
+      any_of:
+        - weather_code_in: [95, 96, 99] # Thunderstorm, Thunderstorm with hail
+        - lightning_risk: true
+    advisory: "All outdoor activities must be halted immediately. Seek substantial enclosed shelter or an all-metal enclosed vehicle. Avoid open fields, elevated areas, bodies of water, and tall isolated trees."
+    recommended_action: "Cease all outdoor activities and seek indoor shelter immediately."
+
+  - id: "SOP-02"
+    name: "Extreme Heat Warning"
+    category: "heat_safety"
+    activities:
+      - "running"
+      - "cycling"
+      - "hiking"
+      - "football"
+      - "cricket"
+      - "outdoor sports"
+      - "general outdoor"
+    severity: "CRITICAL"
+    priority: 90
+    conditions:
+      all_of:
+        - temperature_gte: 40.0 # Celsius
+    advisory: "Strenuous outdoor activities are strictly prohibited due to severe risk of heat stroke and hyperthermia."
+    recommended_action: "Stay indoors in air-conditioned environments, maintain high hydration, and avoid physical exertion."
+
+  - id: "SOP-03"
+    name: "Strong Wind Cycling and Micromobility Advisory"
+    category: "micromobility"
+    activities:
+      - "cycling"
+      - "biking"
+      - "scooter"
+      - "e-scooter"
+      - "skateboarding"
+    severity: "HIGH"
+    priority: 80
+    conditions:
+      any_of:
+        - wind_speed_gte: 40.0 # km/h
+        - wind_gusts_gte: 55.0 # km/h
+    advisory: "Cycling and micromobility are not recommended under the current conditions because wind speed/gusts exceed the safe handling threshold."
+    recommended_action: "Postpone cycling trips or use enclosed public transit/motorized transport."
+
+  - id: "SOP-04"
+    name: "Heavy Rain and Urban Waterlogging for Commuters"
+    category: "micromobility"
+    activities:
+      - "cycling"
+      - "biking"
+      - "walking"
+      - "commuting"
+      - "scooter"
+    severity: "HIGH"
+    priority: 75
+    conditions:
+      any_of:
+        - precipitation_gte: 15.0 # mm/h
+        - precipitation_probability_gte: 80.0
+        - weather_code_in: [65, 67, 82] # Heavy rain, heavy freezing rain, violent rain showers
+    advisory: "Heavy rainfall creates high road slippage, reduced braking efficiency, and localized flooding hazards."
+    recommended_action: "Avoid two-wheeler travel and unpaved pathways; carry waterproof gear if walking is unavoidable."
+
+  - id: "SOP-05"
+    name: "Open Water Swimming and Marine Activities"
+    category: "water_sports"
+    activities:
+      - "swimming"
+      - "open water swimming"
+      - "kayaking"
+      - "paddleboarding"
+      - "boating"
+      - "surfing"
+    severity: "HIGH"
+    priority: 85
+    conditions:
+      any_of:
+        - wind_speed_gte: 30.0 # km/h
+        - weather_code_in: [65, 82, 95, 96, 99] # Heavy rain / storm
+        - wave_height_gte: 1.5
+    advisory: "Open water sports are hazardous under strong surface winds or convective precipitation due to rough surf, currents, and lightning risk."
+    recommended_action: "Do not enter open water bodies; cancel small watercraft departures."
+
+  - id: "SOP-06"
+    name: "High Altitude and Mountain Trail Hiking"
+    category: "hiking_mountaineering"
+    activities:
+      - "hiking"
+      - "trekking"
+      - "mountaineering"
+      - "trail running"
+    severity: "HIGH"
+    priority: 80
+    conditions:
+      any_of:
+        - visibility_lte: 1.0 # km
+        - weather_code_in: [45, 48, 71, 73, 75, 85, 86, 95, 96, 99] # Fog, Snow, Storm
+        - wind_speed_gte: 45.0
+    advisory: "Mountain trails and exposed ridges present severe navigation and fall hazards due to low visibility, slippery terrain, or high winds."
+    recommended_action: "Stay on low-elevation marked trails or postpone mountain hikes until visibility and weather stabilize."
+
+  - id: "SOP-07"
+    name: "Vulnerable Populations Moderate Heat and High UV Exposure"
+    category: "vulnerable_groups"
+    activities:
+      - "general outdoor"
+      - "walking"
+      - "play"
+      - "outdoor sports"
+      - "gardening"
+    target_groups:
+      - "elderly"
+      - "children"
+      - "toddlers"
+      - "infants"
+      - "pregnant"
+      - "chronic_illness"
+    severity: "MEDIUM"
+    priority: 70
+    conditions:
+      any_of:
+        - all_of:
+            - temperature_gte: 32.0
+            - uv_index_gte: 6.0
+        - temperature_gte: 35.0
+    advisory: "Elevated temperature and UV radiation pose increased heat stress and sunburn hazards for vulnerable demographics (children, elderly, and medical risk groups)."
+    recommended_action: "Limit direct sun exposure between 11:00 AM and 4:00 PM, use SPF 30+ sunscreen, wear wide-brim hats, and rest in shaded areas."
+
+  - id: "SOP-08"
+    name: "Sub-Zero Freezing and Frostbite Safety"
+    category: "cold_weather"
+    activities:
+      - "running"
+      - "cycling"
+      - "hiking"
+      - "walking"
+      - "general outdoor"
+    severity: "HIGH"
+    priority: 85
+    conditions:
+      any_of:
+        - temperature_lte: -10.0 # Celsius
+        - wind_chill_lte: -15.0
+    advisory: "Severe freezing temperatures present high risks of frostbite and rapid hypothermia to exposed skin within 30 minutes."
+    recommended_action: "Wear multi-layered thermal insulation, windproof outer shells, thermal gloves, face masks, and limit outdoor exposure duration."
+
+  - id: "SOP-09"
+    name: "Recreational Drone and UAV Flight Operations"
+    category: "aviation_drones"
+    activities:
+      - "drone flying"
+      - "uav flight"
+      - "aerial photography"
+      - "rc plane"
+    severity: "MEDIUM"
+    priority: 65
+    conditions:
+      any_of:
+        - wind_speed_gte: 28.0 # km/h
+        - wind_gusts_gte: 38.0 # km/h
+        - visibility_lte: 3.0 # km
+        - precipitation_gte: 0.2 # mm
+    advisory: "Drone and recreational UAV operations risk fly-aways, loss of control, and water damage to electronics under current atmospheric turbulence or precipitation."
+    recommended_action: "Ground unsealed and lightweight drones (sub-250g and standard consumer quadcopters)."
+
+  - id: "SOP-10"
+    name: "Moderate Wind and Light Rain General Outdoor Exercise"
+    category: "outdoor_general"
+    activities:
+      - "running"
+      - "jogging"
+      - "walking"
+      - "fitness"
+      - "general outdoor"
+    severity: "LOW"
+    priority: 40
+    conditions:
+      all_of:
+        - wind_speed_gte: 20.0
+        - wind_speed_lte: 39.9
+        - temperature_gte: 10.0
+        - temperature_lte: 32.0
+    advisory: "Conditions are breezy but generally safe for cardiovascular outdoor exercise with sensible precautions."
+    recommended_action: "Wear breathable wind-resistant clothing and maintain standard hydration."
