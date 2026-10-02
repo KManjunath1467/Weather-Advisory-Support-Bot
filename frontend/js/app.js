@@ -2,9 +2,20 @@
 
 const API_BASE = "";
 
+// Generate or retrieve persistent browser session ID
+function getSessionId() {
+  let sid = localStorage.getItem("aerosop_session_id");
+  if (!sid) {
+    sid = "session-" + Math.random().toString(36).substring(2, 10) + "-" + Date.now();
+    localStorage.setItem("aerosop_session_id", sid);
+  }
+  return sid;
+}
+
 // State
 const state = {
-  currentLocation: "London",
+  sessionId: getSessionId(),
+  currentLocation: "Bengaluru",
   currentActivity: "cycling",
   vulnerableGroups: [],
   activeTab: "tab-advisor",
@@ -91,7 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initEventListeners();
   startClock();
   fetchSOPs();
-  loadInitialAdvisory("Can I go cycling in London today?", "London", "cycling");
+  loadInitialAdvisory("What is the weather in Bengaluru? Can I go cycling?", "Bengaluru", "cycling");
   runSimulation();
 });
 
@@ -141,12 +152,7 @@ function initEventListeners() {
         async (position) => {
           const lat = position.coords.latitude;
           const lon = position.coords.longitude;
-          try {
-            const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${lat},${lon}&count=1`);
-            handleLocationChange(`${lat.toFixed(2)}, ${lon.toFixed(2)}`);
-          } catch (e) {
-            handleLocationChange(`${lat.toFixed(2)}, ${lon.toFixed(2)}`);
-          }
+          handleLocationChange(`${lat.toFixed(2)}, ${lon.toFixed(2)}`);
         },
         () => {
           alert("Could not access your location. Please type a city name.");
@@ -163,7 +169,7 @@ function initEventListeners() {
       elements.activityChips.forEach((c) => c.classList.remove("active"));
       chip.classList.add("active");
       state.currentActivity = chip.getAttribute("data-activity");
-      triggerAdvisoryQuery(`Check advisory for ${state.currentActivity} in ${state.currentLocation}`);
+      triggerAdvisoryQuery(`Check advisory for ${state.currentActivity}`);
     });
   });
 
@@ -173,7 +179,7 @@ function initEventListeners() {
       state.vulnerableGroups = Array.from(elements.demoCheckboxes)
         .filter((c) => c.checked)
         .map((c) => c.value);
-      triggerAdvisoryQuery(`Check advisory for ${state.currentActivity} in ${state.currentLocation}`);
+      triggerAdvisoryQuery(`Check advisory for ${state.currentActivity}`);
     });
   });
 
@@ -255,7 +261,7 @@ function initEventListeners() {
     elements.btnMic.style.display = "none";
   }
 
-  // Simulator Controls Event Listeners
+  // Simulator Controls
   const simControls = [
     elements.simTemp, elements.simWind, elements.simGusts,
     elements.simPrecip, elements.simUv, elements.simVis,
@@ -310,7 +316,7 @@ function switchTab(tabId) {
 function handleLocationChange(newLocation) {
   state.currentLocation = newLocation;
   elements.cityInput.value = newLocation;
-  triggerAdvisoryQuery(`Check advisory for ${state.currentActivity} in ${newLocation}`, newLocation);
+  triggerAdvisoryQuery(`What is the weather in ${newLocation}? Check advisory for ${state.currentActivity}`, newLocation);
 }
 
 // Initial Advisory Request
@@ -318,7 +324,7 @@ async function loadInitialAdvisory(query, location, activity) {
   await triggerAdvisoryQuery(query, location, activity);
 }
 
-// Trigger Advisory Chat Query
+// Trigger Advisory Chat Query using LangGraph
 async function triggerAdvisoryQuery(query, locationOverride = null, activityOverride = null) {
   appendUserMessage(query);
 
@@ -326,8 +332,9 @@ async function triggerAdvisoryQuery(query, locationOverride = null, activityOver
 
   try {
     const payload = {
-      query: query,
-      location: locationOverride || state.currentLocation,
+      session_id: state.sessionId,
+      message: query,
+      location: locationOverride || null,
       activity: activityOverride || state.currentActivity,
       vulnerable_groups: state.vulnerableGroups,
     };
@@ -339,89 +346,89 @@ async function triggerAdvisoryQuery(query, locationOverride = null, activityOver
     });
 
     if (!res.ok) {
-      throw new Error(`Advisor API responded with status ${res.status}`);
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || `Server status ${res.status}`);
     }
 
     const data = await res.json();
     loadingBubble.remove();
 
     renderAdvisoryData(data);
-    appendBotAdvisoryMessage(data.advisory);
+    appendBotAdvisoryMessage(data.response);
 
     // Save text for speech synthesis
-    state.lastAdvisoryText = data.advisory.advisory_markdown;
+    state.lastAdvisoryText = data.response;
 
-    // Update location label
+    // Update location label if resolved
     if (data.location && data.location.name) {
       state.currentLocation = data.location.name;
       elements.currentLocationText.textContent = data.location.name;
     }
   } catch (err) {
     loadingBubble.remove();
-    appendBotMessage(`⚠️ Error communicating with advisor engine: ${err.message}. Please try again.`);
+    appendBotMessage(`⚠️ Error communicating with LangGraph agent: ${err.message}.`);
   }
 }
 
 // Render Telemetry & Forecasts
 function renderAdvisoryData(data) {
   const w = data.weather;
-  const adv = data.advisory;
+  const matched = data.matched_sops || [];
+  const selected = data.selected_sop;
 
   if (w) {
-    elements.currentTemp.textContent = w.temperature.toFixed(1);
-    elements.apparentTemp.textContent = `${w.apparent_temperature.toFixed(1)}°C`;
+    elements.currentTemp.textContent = Number(w.temperature).toFixed(1);
+    elements.apparentTemp.textContent = `${Number(w.apparent_temperature).toFixed(1)}°C`;
     elements.weatherDesc.textContent = w.weather_description;
     elements.weatherIcon.textContent = getWeatherIcon(w.weather_code);
 
-    elements.metricWind.textContent = `${w.wind_speed.toFixed(1)} km/h`;
-    elements.metricGusts.textContent = `Gusts ${w.wind_gusts.toFixed(1)} km/h`;
-    elements.metricPrecip.textContent = `${w.precipitation.toFixed(1)} mm`;
-    elements.metricPrecipProb.textContent = `${w.precipitation_probability.toFixed(0)}% chance`;
-    elements.metricUv.textContent = `${w.uv_index.toFixed(1)} (${getUVLabel(w.uv_index)})`;
-    elements.metricVis.textContent = `${w.visibility.toFixed(1)} km`;
-    elements.metricHumidity.textContent = `${w.relative_humidity.toFixed(0)}%`;
+    elements.metricWind.textContent = `${Number(w.wind_speed).toFixed(1)} km/h`;
+    elements.metricGusts.textContent = `Gusts ${Number(w.wind_gusts).toFixed(1)} km/h`;
+    elements.metricPrecip.textContent = `${Number(w.precipitation).toFixed(1)} mm`;
+    elements.metricPrecipProb.textContent = `${Number(w.precipitation_probability).toFixed(0)}% chance`;
+    elements.metricUv.textContent = `${Number(w.uv_index).toFixed(1)} (${getUVLabel(w.uv_index)})`;
+    elements.metricVis.textContent = `${Number(w.visibility).toFixed(1)} km`;
+    elements.metricHumidity.textContent = `${Number(w.relative_humidity).toFixed(0)}%`;
     elements.metricLightning.textContent = w.lightning_risk ? "⚡ ACTIVE RISK" : "None";
     elements.metricLightning.style.color = w.lightning_risk ? "#ef4444" : "#f1f5f9";
   }
 
-  // Update Safety Gauge
-  const score = adv.safety_score;
-  elements.safetyScoreValue.textContent = score;
+  // Update Status and SOP Banner
+  if (selected) {
+    const sev = selected.severity;
+    let color = "#ef4444";
+    if (sev === "HIGH") color = "#f97316";
+    else if (sev === "MEDIUM") color = "#eab308";
+    else if (sev === "LOW") color = "#3b82f6";
+    else if (sev === "ADVISORY") color = "#a855f7";
 
-  // Arc length is ~126 (pi * 40)
-  const offset = 126 - (score / 100) * 126;
-  elements.gaugeFill.style.strokeDashoffset = offset;
-  elements.gaugeFill.style.stroke = adv.risk_color || "#10b981";
+    elements.safetyStatusBadge.style.background = `${color}22`;
+    elements.safetyStatusBadge.style.borderColor = color;
+    elements.safetyStatusBadge.style.color = color;
+    elements.safetyStatusText.textContent = `${sev} SAFETY DIRECTIVE`;
 
-  // Safety Status Badge
-  elements.safetyStatusBadge.style.background = `${adv.risk_color}22`;
-  elements.safetyStatusBadge.style.borderColor = adv.risk_color;
-  elements.safetyStatusBadge.style.color = adv.risk_color;
-  elements.safetyStatusText.textContent = adv.activity_status;
-
-  // SOP Alert Banner Box
-  if (adv.matched_sops && adv.matched_sops.length > 0) {
-    const topSop = adv.matched_sops[0];
-    const sevClass = topSop.severity.toLowerCase();
-
-    elements.sopAlertBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>${topSop.severity} SAFETY DIRECTIVE TRIGGERED</span>`;
-    elements.sopAlertBadge.style.color = adv.risk_color;
+    elements.sopAlertBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>[${selected.id}] ${selected.name}</span>`;
+    elements.sopAlertBadge.style.color = color;
 
     elements.sopAlertBody.innerHTML = `
-      <div class="sop-directive-box ${sevClass}">
+      <div class="sop-directive-box ${sev.toLowerCase()}">
         <div class="sop-title-row">
-          <span>[${topSop.id}] ${topSop.name}</span>
-          <span style="color:${adv.risk_color}; font-weight:800;">${topSop.severity}</span>
+          <span>Priority ${selected.priority} | Severity ${selected.severity}</span>
         </div>
-        <p><strong>Condition:</strong> ${topSop.matched_reasons.join("; ")}</p>
-        <p><strong>Guideline:</strong> ${topSop.advisory}</p>
-        <div class="sop-action-highlight">🚨 Required Action: ${topSop.action}</div>
+        <p><strong>Condition:</strong> ${selected.matched_reasons ? selected.matched_reasons.join("; ") : ""}</p>
+        <p><strong>Guideline:</strong> ${selected.advisory}</p>
+        <div class="sop-action-highlight">🚨 Required Action: ${selected.action}</div>
       </div>
     `;
   } else {
-    elements.sopAlertBadge.innerHTML = `<i class="fa-solid fa-shield-check"></i> <span>SAFETY NOMINAL</span>`;
-    elements.sopAlertBadge.style.color = "#34d399";
-    elements.sopAlertBody.innerHTML = `<p>No hazardous SOP violations detected for <strong>${state.currentActivity}</strong> in this area. Conditions are safe.</p>`;
+    elements.safetyStatusBadge.style.background = `rgba(16, 185, 129, 0.15)`;
+    elements.safetyStatusBadge.style.borderColor = "#10b981";
+    elements.safetyStatusBadge.style.color = "#34d399";
+    elements.safetyStatusText.textContent = data.sop_found ? "SOP APPLIED" : "NO SOP MATCHED";
+
+    elements.sopAlertBadge.innerHTML = `<i class="fa-solid fa-circle-info"></i> <span>STATUS NOTICE</span>`;
+    elements.sopAlertBadge.style.color = "#94a3b8";
+    elements.sopAlertBody.innerHTML = `<p>${data.response}</p>`;
   }
 
   // Hourly Forecast
@@ -429,9 +436,6 @@ function renderAdvisoryData(data) {
 
   // Daily Forecast
   renderDaily(data.daily_forecast);
-
-  // Gear Checklist
-  renderGear(adv.gear_checklist);
 }
 
 function renderHourly(hourly) {
@@ -459,7 +463,7 @@ function renderDaily(daily) {
     const item = document.createElement("div");
     item.className = "daily-item";
     const dateObj = new Date(d.date);
-    const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    const dayName = isNaN(dateObj.getTime()) ? d.date : dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
     item.innerHTML = `
       <div class="daily-date">${dayName}</div>
@@ -471,21 +475,6 @@ function renderDaily(daily) {
       <div style="font-size:0.75rem; color:#38bdf8;">${d.precip_prob}% rain</div>
     `;
     elements.dailyForecastList.appendChild(item);
-  });
-}
-
-function renderGear(gearList) {
-  if (!elements.gearItemsList) return;
-  elements.gearItemsList.innerHTML = "";
-  if (!gearList || gearList.length === 0) {
-    elements.gearItemsList.innerHTML = `<div class="gear-item-pill">Standard comfortable clothing</div>`;
-    return;
-  }
-  gearList.forEach((item) => {
-    const pill = document.createElement("div");
-    pill.className = "gear-item-pill";
-    pill.innerHTML = `<span>${item}</span>`;
-    elements.gearItemsList.appendChild(pill);
   });
 }
 
@@ -518,20 +507,20 @@ function appendBotLoadingMessage() {
   bubble.className = "chat-bubble bot-bubble";
   bubble.innerHTML = `
     <div class="bubble-header"><i class="fa-solid fa-robot"></i> <strong>AeroSOP Copilot</strong></div>
-    <div class="bubble-content"><p><i class="fa-solid fa-spinner fa-spin"></i> Consulting weather radar & evaluating safety SOPs...</p></div>
+    <div class="bubble-content"><p><i class="fa-solid fa-spinner fa-spin"></i> Executing LangGraph agent & consulting SOP rules...</p></div>
   `;
   elements.chatMessages.appendChild(bubble);
   scrollChatBottom();
   return bubble;
 }
 
-function appendBotAdvisoryMessage(advisory) {
+function appendBotAdvisoryMessage(markdownText) {
   const bubble = document.createElement("div");
   bubble.className = "chat-bubble bot-bubble";
-  const htmlContent = parseMarkdownToHtml(advisory.advisory_markdown);
+  const htmlContent = parseMarkdownToHtml(markdownText);
 
   bubble.innerHTML = `
-    <div class="bubble-header"><i class="fa-solid fa-shield-halved"></i> <strong>Safety Advisory Directive</strong></div>
+    <div class="bubble-header"><i class="fa-solid fa-shield-halved"></i> <strong>LangGraph Policy Response</strong></div>
     <div class="bubble-content">${htmlContent}</div>
   `;
   elements.chatMessages.appendChild(bubble);
