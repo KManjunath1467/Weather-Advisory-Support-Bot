@@ -16,7 +16,7 @@ from backend.sop.models import WeatherData, ConditionRule
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="AI Weather-Advisory Support Bot with Deterministic SOP Safety Rule Engine",
+    description="AI Weather-Advisory Support Bot with LangGraph StateGraph & Deterministic SOP Engine",
 )
 
 # CORS Middleware
@@ -32,10 +32,12 @@ sop_engine = SOPEngine()
 
 # Request Models
 class AdvisorChatRequest(BaseModel):
-    query: str = Field(..., description="User query, e.g. 'Can I go cycling in New York today?'")
+    session_id: Optional[str] = Field("default", description="Client session ID for conversation memory")
+    message: Optional[str] = Field(None, description="User message/query, e.g. 'Can I go cycling in Bengaluru?'")
+    query: Optional[str] = Field(None, description="Alias for message")
     location: Optional[str] = Field(None, description="Optional city or location override")
     activity: Optional[str] = Field(None, description="Optional activity override")
-    vulnerable_groups: Optional[List[str]] = Field(default_factory=list, description="Optional target groups e.g. ['children', 'elderly']")
+    vulnerable_groups: Optional[List[str]] = Field(default_factory=list, description="Optional target groups")
 
 class WeatherLookupRequest(BaseModel):
     location: str = Field(..., description="City name or address to query")
@@ -63,6 +65,7 @@ async def health_check():
         "status": "healthy",
         "app": settings.app_name,
         "version": settings.app_version,
+        "langgraph_agent": "active",
         "sops_loaded": len(sop_engine.get_all_sops()),
     }
 
@@ -85,6 +88,7 @@ async def get_activities():
             {"id": "hiking", "name": "Hiking & Mountain Trails", "icon": "🥾", "category": "adventure"},
             {"id": "swimming", "name": "Open Water Swimming & Watersports", "icon": "🏊", "category": "water"},
             {"id": "drone flying", "name": "Drone & UAV Flight", "icon": "🚁", "category": "aviation"},
+            {"id": "picnic", "name": "Family Picnic & Outings", "icon": "🧺", "category": "family_recreation"},
             {"id": "outdoor sports", "name": "Outdoor Sports (Football/Cricket/Golf)", "icon": "⚽", "category": "sports"},
             {"id": "walking", "name": "Walking & Daily Commute", "icon": "🚶", "category": "daily"},
             {"id": "general outdoor", "name": "General Outdoor & Parks", "icon": "🌳", "category": "leisure"},
@@ -112,22 +116,33 @@ async def lookup_weather(req: WeatherLookupRequest):
         timezone=geo.get("timezone", "auto"),
     )
     
+    if not weather_obj:
+        raise HTTPException(status_code=503, detail="Live weather service temporarily unavailable.")
+
     return {
         "location": geo,
         "weather": weather_obj.model_dump(exclude={"raw_response"}),
-        "hourly": raw_data.get("hourly", {}),
-        "daily": raw_data.get("daily", {}),
+        "hourly": raw_data.get("hourly", {}) if raw_data else {},
+        "daily": raw_data.get("daily", {}) if raw_data else {},
     }
 
 @app.post("/api/advisor/chat")
 async def chat_advisor(req: AdvisorChatRequest):
-    """Processes user chat advisory query, evaluates SOPs, and returns comprehensive advice."""
+    """
+    Processes user query strictly using the LangGraph StateGraph agent.
+    Maintains session-level conversation memory.
+    """
+    user_msg = req.message or req.query
+    if not user_msg:
+        raise HTTPException(status_code=400, detail="Missing message or query parameter.")
+
     try:
-        res = await advisor_service.get_advice_for_query(
-            query=req.query,
-            override_location=req.location,
-            override_activity=req.activity,
-            target_groups=req.vulnerable_groups,
+        res = await advisor_service.process_chat(
+            query=user_msg,
+            session_id=req.session_id or "default",
+            location=req.location,
+            activity=req.activity,
+            vulnerable_groups=req.vulnerable_groups,
         )
         return res
     except Exception as e:

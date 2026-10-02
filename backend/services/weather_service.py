@@ -59,7 +59,13 @@ class WeatherService:
         self._geo_cache: Dict[str, Dict[str, Any]] = {}
 
     async def geocode(self, location_query: str) -> Optional[Dict[str, Any]]:
-        """Finds geographical coordinates for a city or query name."""
+        """
+        Resolves geographical coordinates for a city or query name strictly using Open-Meteo Geocoding.
+        Returns None if unresolved without any fabricated fallbacks.
+        """
+        if not location_query:
+            return None
+
         query_cleaned = location_query.strip()
         if not query_cleaned:
             return None
@@ -104,27 +110,15 @@ class WeatherService:
         except Exception as e:
             print(f"Geocoding error for '{location_query}': {e}")
 
-        # Default fallback coordinates for common cities if offline
-        fallback_cities = {
-            "london": {"name": "London, United Kingdom", "city": "London", "latitude": 51.5074, "longitude": -0.1278, "country": "UK", "timezone": "Europe/London"},
-            "new york": {"name": "New York, USA", "city": "New York", "latitude": 40.7128, "longitude": -74.0060, "country": "USA", "timezone": "America/New_York"},
-            "tokyo": {"name": "Tokyo, Japan", "city": "Tokyo", "latitude": 35.6762, "longitude": 139.6503, "country": "Japan", "timezone": "Asia/Tokyo"},
-            "paris": {"name": "Paris, France", "city": "Paris", "latitude": 48.8566, "longitude": 2.3522, "country": "France", "timezone": "Europe/Paris"},
-            "mumbai": {"name": "Mumbai, India", "city": "Mumbai", "latitude": 19.0760, "longitude": 72.8777, "country": "India", "timezone": "Asia/Kolkata"},
-            "delhi": {"name": "Delhi, India", "city": "Delhi", "latitude": 28.6139, "longitude": 77.2090, "country": "India", "timezone": "Asia/Kolkata"},
-            "sydney": {"name": "Sydney, Australia", "city": "Sydney", "latitude": -33.8688, "longitude": 151.2093, "country": "Australia", "timezone": "Australia/Sydney"},
-            "dubai": {"name": "Dubai, UAE", "city": "Dubai", "latitude": 25.2048, "longitude": 55.2708, "country": "UAE", "timezone": "Asia/Dubai"},
-            "singapore": {"name": "Singapore", "city": "Singapore", "latitude": 1.3521, "longitude": 103.8198, "country": "Singapore", "timezone": "Asia/Singapore"},
-        }
-        for k, v in fallback_cities.items():
-            if k in query_cleaned.lower():
-                return v
-
+        # Return None when geocoding fails - NO fabricated city fallbacks!
         return None
 
-    async def get_weather(self, latitude: float, longitude: float, location_name: str, timezone: str = "auto") -> Tuple[WeatherData, Dict[str, Any]]:
+    async def get_weather(
+        self, latitude: float, longitude: float, location_name: str, timezone: str = "auto"
+    ) -> Tuple[Optional[WeatherData], Optional[Dict[str, Any]]]:
         """
-        Fetches full current weather, hourly forecast, and daily outlook from Open-Meteo.
+        Fetches live current weather, hourly forecast, and daily outlook from Open-Meteo.
+        Returns (None, None) if live API retrieval fails. No synthetic numbers are generated.
         """
         params = {
             "latitude": latitude,
@@ -170,108 +164,64 @@ class WeatherService:
             "timezone": timezone or "auto",
         }
 
-        raw_data = {}
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 res = await client.get(self.forecast_url, params=params)
                 if res.status_code == 200:
                     raw_data = res.json()
+                    current = raw_data.get("current")
+                    if current:
+                        temp = float(current.get("temperature_2m", 0.0))
+                        apparent_temp = float(current.get("apparent_temperature", temp))
+                        wind_spd = float(current.get("wind_speed_10m", 0.0))
+                        wind_gst = float(current.get("wind_gusts_10m", wind_spd))
+                        humidity = float(current.get("relative_humidity_2m", 0.0))
+                        precip = float(current.get("precipitation", 0.0))
+                        w_code = int(current.get("weather_code", 0))
+                        uv = float(current.get("uv_index", 0.0))
+                        vis_meters = float(current.get("visibility", 10000.0))
+                        vis_km = round(vis_meters / 1000.0, 1)
+                        is_day = bool(current.get("is_day", 1))
+
+                        # Hourly precipitation probability for the current hour
+                        precip_prob = 0.0
+                        hourly = raw_data.get("hourly", {})
+                        if hourly and "precipitation_probability" in hourly:
+                            probs = hourly["precipitation_probability"]
+                            if probs:
+                                precip_prob = float(probs[0])
+
+                        w_desc, w_icon, is_lightning = WMO_CODE_MAP.get(w_code, ("Fair", "☀️", False))
+                        wind_chill_val = calculate_wind_chill(temp, wind_spd)
+
+                        weather_obj = WeatherData(
+                            location_name=location_name,
+                            latitude=latitude,
+                            longitude=longitude,
+                            timezone=raw_data.get("timezone", timezone),
+                            temperature=temp,
+                            apparent_temperature=apparent_temp,
+                            wind_speed=wind_spd,
+                            wind_gusts=wind_gst,
+                            wind_chill=wind_chill_val,
+                            relative_humidity=humidity,
+                            precipitation=precip,
+                            precipitation_probability=precip_prob,
+                            weather_code=w_code,
+                            weather_description=w_desc,
+                            visibility=vis_km,
+                            uv_index=uv,
+                            is_day=is_day,
+                            lightning_risk=is_lightning,
+                            wave_height=None,
+                            raw_response=raw_data,
+                        )
+
+                        return weather_obj, raw_data
         except Exception as e:
             print(f"Weather API error for {location_name}: {e}")
 
-        # Fallback simulation if offline or error
-        if not raw_data or "current" not in raw_data:
-            raw_data = self._generate_fallback_weather(latitude, longitude, location_name)
-
-        current = raw_data.get("current", {})
-        temp = float(current.get("temperature_2m", 22.0))
-        apparent_temp = float(current.get("apparent_temperature", temp))
-        wind_spd = float(current.get("wind_speed_10m", 12.0))
-        wind_gst = float(current.get("wind_gusts_10m", wind_spd * 1.3))
-        humidity = float(current.get("relative_humidity_2m", 55.0))
-        precip = float(current.get("precipitation", 0.0))
-        w_code = int(current.get("weather_code", 0))
-        uv = float(current.get("uv_index", 3.0))
-        vis_meters = float(current.get("visibility", 10000.0))
-        vis_km = round(vis_meters / 1000.0, 1)
-        is_day = bool(current.get("is_day", 1))
-
-        # Hourly precipitation probability for the current hour
-        precip_prob = 0.0
-        hourly = raw_data.get("hourly", {})
-        if hourly and "precipitation_probability" in hourly:
-            probs = hourly["precipitation_probability"]
-            if probs:
-                precip_prob = float(probs[0])
-
-        w_desc, w_icon, is_lightning = WMO_CODE_MAP.get(w_code, ("Fair", "☀️", False))
-        wind_chill_val = calculate_wind_chill(temp, wind_spd)
-
-        weather_obj = WeatherData(
-            location_name=location_name,
-            latitude=latitude,
-            longitude=longitude,
-            timezone=raw_data.get("timezone", timezone),
-            temperature=temp,
-            apparent_temperature=apparent_temp,
-            wind_speed=wind_spd,
-            wind_gusts=wind_gst,
-            wind_chill=wind_chill_val,
-            relative_humidity=humidity,
-            precipitation=precip,
-            precipitation_probability=precip_prob,
-            weather_code=w_code,
-            weather_description=w_desc,
-            visibility=vis_km,
-            uv_index=uv,
-            is_day=is_day,
-            lightning_risk=is_lightning,
-            wave_height=None,
-            raw_response=raw_data,
-        )
-
-        return weather_obj, raw_data
-
-    def _generate_fallback_weather(self, lat: float, lon: float, location_name: str) -> Dict[str, Any]:
-        """Generates realistic fallback data when external connection is restricted."""
-        return {
-            "latitude": lat,
-            "longitude": lon,
-            "timezone": "UTC",
-            "current": {
-                "temperature_2m": 24.5,
-                "apparent_temperature": 25.0,
-                "relative_humidity_2m": 58,
-                "is_day": 1,
-                "precipitation": 0.0,
-                "weather_code": 1,
-                "wind_speed_10m": 14.2,
-                "wind_gusts_10m": 20.1,
-                "uv_index": 4.5,
-                "visibility": 10000,
-            },
-            "hourly": {
-                "time": [f"2026-10-02T{h:02d}:00" for h in range(24)],
-                "temperature_2m": [22 + (i % 6) for i in range(24)],
-                "precipitation_probability": [5, 10, 15, 10, 5, 0, 0, 0, 5, 10, 10, 15, 20, 25, 20, 15, 10, 5, 5, 5, 5, 5, 5, 5],
-                "weather_code": [1] * 24,
-                "wind_speed_10m": [12 + (i % 5) for i in range(24)],
-                "uv_index": [0, 0, 0, 0, 0, 0, 1, 2, 4, 6, 7, 6, 5, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-                "visibility": [10000] * 24,
-            },
-            "daily": {
-                "time": [f"2026-10-0{i+2}" for i in range(7)],
-                "weather_code": [1, 2, 0, 61, 2, 1, 0],
-                "temperature_2m_max": [27.0, 26.5, 28.0, 23.0, 25.0, 26.0, 27.5],
-                "temperature_2m_min": [18.0, 17.5, 19.0, 16.0, 17.0, 18.0, 19.0],
-                "precipitation_sum": [0.0, 0.2, 0.0, 8.5, 1.2, 0.0, 0.0],
-                "precipitation_probability_max": [10, 20, 5, 85, 40, 15, 5],
-                "wind_speed_10m_max": [18.0, 19.5, 15.0, 32.0, 22.0, 16.0, 14.0],
-                "wind_gusts_10m_max": [28.0, 30.0, 24.0, 48.0, 34.0, 25.0, 22.0],
-                "uv_index_max": [6.5, 6.0, 7.0, 4.0, 5.5, 6.5, 7.0],
-                "sunrise": ["06:15"] * 7,
-                "sunset": ["18:30"] * 7,
-            },
-        }
+        # Strict failure: return (None, None) so LangGraph branches to weather_error
+        return None, None
 
 weather_service = WeatherService()

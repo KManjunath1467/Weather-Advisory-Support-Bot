@@ -1,129 +1,122 @@
 from typing import Optional, Dict, Any, List
-from backend.services.weather_service import weather_service
-from backend.services.intent_service import intent_service
-from backend.services.llm_service import llm_service
-from backend.sop.engine import SOPEngine
-from backend.sop.models import WeatherData
-
-sop_engine = SOPEngine()
+from backend.graph.agent import advisor_graph
+from backend.graph.state import AdvisorState
+from backend.memory.session_store import session_store
 
 class AdvisorService:
-    def __init__(self):
-        self.weather_svc = weather_service
-        self.intent_svc = intent_service
-        self.llm_svc = llm_service
-        self.sop_eng = sop_engine
-
-    async def get_advice_for_query(
+    async def process_chat(
         self,
         query: str,
-        override_location: Optional[str] = None,
-        override_activity: Optional[str] = None,
-        target_groups: Optional[List[str]] = None,
+        session_id: Optional[str] = "default",
+        location: Optional[str] = None,
+        activity: Optional[str] = None,
+        vulnerable_groups: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
-        End-to-end processing pipeline for natural language query:
-        1. Parse intent, location, activity, demographics
-        2. Geocode location & fetch weather telemetry
-        3. Evaluate deterministic SOP conditions
-        4. Synthesize advisory & safety response
+        Executes the LangGraph Agent for a conversational outdoor safety query.
         """
-        # 1. Intent Extraction
-        intent = self.intent_svc.extract_intent(query, default_location=override_location)
-        if override_activity:
-            intent.activity = override_activity
-        if override_location:
-            intent.location = override_location
-        if target_groups:
-            intent.vulnerable_groups = list(set(intent.vulnerable_groups + target_groups))
+        session_id = session_id or "default"
+        
+        # If user explicitly supplied location/activity in request body, seed/update session
+        if location:
+            session_store.update(session_id, location=location)
+        if activity:
+            session_store.update(session_id, activity=activity)
+        if vulnerable_groups:
+            session_store.update(session_id, vulnerable_groups=vulnerable_groups)
 
-        # Determine location to query
-        target_location = intent.location or "London"
+        session = session_store.get_or_create(session_id)
 
-        # 2. Geocode
-        geo_info = await self.weather_svc.geocode(target_location)
-        if not geo_info:
-            # Fallback to London if geocoding yields no results
-            geo_info = {
-                "name": target_location.title(),
-                "city": target_location.title(),
-                "latitude": 51.5074,
-                "longitude": -0.1278,
-                "country": "Global",
-                "timezone": "UTC",
-            }
+        # Initial state for LangGraph
+        initial_state: AdvisorState = {
+            "session_id": session_id,
+            "user_query": query,
+            "conversation_history": session.history,
+            "intent": None,
+            "location": location or session.location,
+            "location_resolved": False,
+            "latitude": session.latitude,
+            "longitude": session.longitude,
+            "weather": None,
+            "raw_weather": None,
+            "weather_available": False,
+            "matched_sops": [],
+            "selected_sop": None,
+            "sop_found": False,
+            "conflict_resolution": None,
+            "adversarial_attempt": False,
+            "error": None,
+            "final_response": "",
+        }
 
-        # 3. Weather Fetch
-        weather_obj, raw_weather = await self.weather_svc.get_weather(
-            latitude=geo_info["latitude"],
-            longitude=geo_info["longitude"],
-            location_name=geo_info["name"],
-            timezone=geo_info.get("timezone", "auto"),
-        )
+        # Invoke LangGraph StateGraph
+        final_state = await advisor_graph.ainvoke(initial_state)
 
-        # 4. SOP Rule Evaluation
-        matched_sops = self.sop_eng.evaluate(
-            weather=weather_obj,
-            activity=intent.activity,
-            target_groups=intent.vulnerable_groups,
-        )
+        # Record history
+        session_store.add_history(session_id, "user", query)
+        session_store.add_history(session_id, "assistant", final_state.get("final_response", ""))
 
-        # 5. LLM Advisory Synthesis
-        advisory_payload = self.llm_svc.generate_advisory(
-            query=query,
-            intent=intent,
-            weather=weather_obj,
-            matched_sops=matched_sops,
-        )
-
-        # Format hourly and daily forecasts for frontend visualization
+        # Format hourly and daily forecasts if live weather was successfully retrieved
         hourly_data = []
-        raw_hourly = raw_weather.get("hourly", {})
-        if raw_hourly and "time" in raw_hourly:
-            times = raw_hourly.get("time", [])[:24]
-            temps = raw_hourly.get("temperature_2m", [])[:24]
-            probs = raw_hourly.get("precipitation_probability", [])[:24]
-            w_codes = raw_hourly.get("weather_code", [])[:24]
-            winds = raw_hourly.get("wind_speed_10m", [])[:24]
-            uvs = raw_hourly.get("uv_index", [])[:24]
-            for i in range(len(times)):
-                t_str = times[i].split("T")[-1] if "T" in times[i] else f"{i:02d}:00"
-                hourly_data.append({
-                    "time": t_str,
-                    "temperature": temps[i] if i < len(temps) else weather_obj.temperature,
-                    "precip_prob": probs[i] if i < len(probs) else 0,
-                    "weather_code": w_codes[i] if i < len(w_codes) else weather_obj.weather_code,
-                    "wind_speed": winds[i] if i < len(winds) else weather_obj.wind_speed,
-                    "uv_index": uvs[i] if i < len(uvs) else 0,
-                })
-
         daily_data = []
-        raw_daily = raw_weather.get("daily", {})
-        if raw_daily and "time" in raw_daily:
-            d_times = raw_daily.get("time", [])[:7]
-            t_max = raw_daily.get("temperature_2m_max", [])[:7]
-            t_min = raw_daily.get("temperature_2m_min", [])[:7]
-            d_codes = raw_daily.get("weather_code", [])[:7]
-            d_probs = raw_daily.get("precipitation_probability_max", [])[:7]
-            d_winds = raw_daily.get("wind_speed_10m_max", [])[:7]
-            for i in range(len(d_times)):
-                daily_data.append({
-                    "date": d_times[i],
-                    "temp_max": t_max[i] if i < len(t_max) else weather_obj.temperature + 3,
-                    "temp_min": t_min[i] if i < len(t_min) else weather_obj.temperature - 4,
-                    "weather_code": d_codes[i] if i < len(d_codes) else weather_obj.weather_code,
-                    "precip_prob": d_probs[i] if i < len(d_probs) else 0,
-                    "wind_speed": d_winds[i] if i < len(d_winds) else weather_obj.wind_speed,
-                })
+        raw_weather = final_state.get("raw_weather")
+        weather_dict = final_state.get("weather")
+
+        if raw_weather:
+            raw_hourly = raw_weather.get("hourly", {})
+            if raw_hourly and "time" in raw_hourly:
+                times = raw_hourly.get("time", [])[:24]
+                temps = raw_hourly.get("temperature_2m", [])[:24]
+                probs = raw_hourly.get("precipitation_probability", [])[:24]
+                w_codes = raw_hourly.get("weather_code", [])[:24]
+                winds = raw_hourly.get("wind_speed_10m", [])[:24]
+                uvs = raw_hourly.get("uv_index", [])[:24]
+                for i in range(len(times)):
+                    t_str = times[i].split("T")[-1] if "T" in times[i] else f"{i:02d}:00"
+                    hourly_data.append({
+                        "time": t_str,
+                        "temperature": temps[i] if i < len(temps) else (weather_dict.get("temperature") if weather_dict else 0),
+                        "precip_prob": probs[i] if i < len(probs) else 0,
+                        "weather_code": w_codes[i] if i < len(w_codes) else 0,
+                        "wind_speed": winds[i] if i < len(winds) else 0,
+                        "uv_index": uvs[i] if i < len(uvs) else 0,
+                    })
+
+            raw_daily = raw_weather.get("daily", {})
+            if raw_daily and "time" in raw_daily:
+                d_times = raw_daily.get("time", [])[:7]
+                t_max = raw_daily.get("temperature_2m_max", [])[:7]
+                t_min = raw_daily.get("temperature_2m_min", [])[:7]
+                d_codes = raw_daily.get("weather_code", [])[:7]
+                d_probs = raw_daily.get("precipitation_probability_max", [])[:7]
+                d_winds = raw_daily.get("wind_speed_10m_max", [])[:7]
+                for i in range(len(d_times)):
+                    daily_data.append({
+                        "date": d_times[i],
+                        "temp_max": t_max[i] if i < len(t_max) else 0,
+                        "temp_min": t_min[i] if i < len(t_min) else 0,
+                        "weather_code": d_codes[i] if i < len(d_codes) else 0,
+                        "precip_prob": d_probs[i] if i < len(d_probs) else 0,
+                        "wind_speed": d_winds[i] if i < len(d_winds) else 0,
+                    })
 
         return {
-            "query": query,
-            "intent": intent.model_dump(),
-            "location": geo_info,
-            "weather": weather_obj.model_dump(exclude={"raw_response"}),
+            "session_id": session_id,
+            "response": final_state.get("final_response", ""),
+            "intent": final_state.get("intent"),
+            "location": {
+                "name": final_state.get("location"),
+                "latitude": final_state.get("latitude"),
+                "longitude": final_state.get("longitude"),
+            } if final_state.get("location_resolved") else None,
+            "weather": weather_dict,
+            "matched_sops": final_state.get("matched_sops", []),
+            "selected_sop": final_state.get("selected_sop"),
+            "conflict_resolution": final_state.get("conflict_resolution"),
+            "sop_found": final_state.get("sop_found", False),
+            "error": final_state.get("error"),
             "hourly_forecast": hourly_data,
             "daily_forecast": daily_data,
-            "advisory": advisory_payload,
         }
 
 advisor_service = AdvisorService()

@@ -12,6 +12,7 @@ sops:
       - "cycling"
       - "camping"
       - "general outdoor"
+      - "picnic"
     severity: "CRITICAL"
     priority: 100
     conditions:
@@ -55,7 +56,7 @@ sops:
       any_of:
         - wind_speed_gte: 40.0 # km/h
         - wind_gusts_gte: 55.0 # km/h
-    advisory: "Cycling and micromobility are not recommended under the current conditions because wind speed/gusts exceed the safe handling threshold."
+    advisory: "Cycling and micromobility are not recommended under current conditions because wind speed/gusts exceed the safe handling threshold."
     recommended_action: "Postpone cycling trips or use enclosed public transit/motorized transport."
 
   - id: "SOP-04"
@@ -124,6 +125,7 @@ sops:
       - "play"
       - "outdoor sports"
       - "gardening"
+      - "picnic"
     target_groups:
       - "elderly"
       - "children"
@@ -198,3 +200,23 @@ sops:
         - temperature_lte: 32.0
     advisory: "Conditions are breezy but generally safe for cardiovascular outdoor exercise with sensible precautions."
     recommended_action: "Wear breathable wind-resistant clothing and maintain standard hydration."
+
+  - id: "SOP-11"
+    name: "Family Picnic and Outdoor Social Gathering Advisory"
+    category: "family_recreation"
+    activities:
+      - "picnic"
+      - "family outing"
+      - "outdoor gathering"
+      - "barbecue"
+      - "bbq"
+      - "park visit"
+    severity: "ADVISORY"
+    priority: 30
+    conditions:
+      any_of:
+        - precipitation_gte: 1.0 # Light shower dampens picnic setup
+        - wind_speed_gte: 25.0 # High wind disrupts tents and paperware
+        - temperature_lte: 12.0 # Chilly for sitting outdoors
+    advisory: "Outdoor picnics and social gatherings face damp ground, wind-blown dining materials, or cold seating conditions."
+    recommended_action: "Set up under a permanent covered pavilion, secure lightweight table items, and bring waterproof ground mats."

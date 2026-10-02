@@ -2,17 +2,48 @@ import re
 from typing import List, Optional
 from backend.sop.models import IntentExtraction
 
-# Known activities mapped to canonical categories
 ACTIVITY_KEYWORDS = {
-    "cycling": ["cycling", "biking", "bike", "bicycle", "cycle", "ride a bike", "bicycled"],
-    "running": ["running", "jogging", "jog", "run", "marathon", "sprint", "trail run"],
-    "hiking": ["hiking", "trekking", "hike", "trek", "mountaineering", "mountain climb", "climbing"],
-    "swimming": ["swimming", "swim", "open water swim", "kayaking", "kayak", "paddleboarding", "sup", "boating", "surfing", "surf"],
-    "drone flying": ["drone", "drones", "drone flying", "uav", "quadcopter", "aerial photography", "rc plane"],
-    "walking": ["walking", "walk", "stroll", "commute on foot", "dog walking"],
-    "outdoor sports": ["football", "soccer", "cricket", "golf", "tennis", "basketball", "baseball", "rugby", "volleyball"],
-    "camping": ["camping", "camp", "tent", "bonfire"],
-    "general outdoor": ["outside", "outdoor", "picnic", "park", "garden", "gardening", "sightseeing", "explore"],
+    "cycling": [
+        "cycling", "biking", "bike", "bicycle", "cycle", "ride a bike", "ride my bike",
+        "bicycled", "take my bike out", "take my bicycle out", "bike ride", "biking outside",
+        "go cycling", "cycling trip", "ride outside", "pedaling", "e-bike", "scooter", "e-scooter"
+    ],
+    "running": [
+        "running", "jogging", "jog", "run", "marathon", "sprint", "trail run",
+        "jog outside", "go for a jog", "go for a run", "morning run", "evening run",
+        "run outside", "jogging outside", "cardio outside", "take a jog"
+    ],
+    "hiking": [
+        "hiking", "trekking", "hike", "trek", "mountaineering", "mountain climb", "climbing",
+        "trail walk", "mountain hike", "trail hiking", "mountain trail", "hiking trail",
+        "go hiking", "hiking trip"
+    ],
+    "swimming": [
+        "swimming", "swim", "open water swim", "kayaking", "kayak", "paddleboarding", "sup",
+        "boating", "surfing", "surf", "lake swim", "sea swim", "ocean swim", "open water swimming"
+    ],
+    "drone flying": [
+        "drone", "drones", "drone flying", "uav", "quadcopter", "aerial photography", "rc plane",
+        "fly a drone", "fly my drone", "drone flight", "flying drones", "fly uav"
+    ],
+    "picnic": [
+        "picnic", "family picnic", "picnic outside", "have a picnic", "family outing",
+        "barbecue", "bbq", "park visit", "outdoor gathering", "outdoor lunch"
+    ],
+    "walking": [
+        "walking", "walk", "stroll", "commute on foot", "dog walking", "walk outside",
+        "walking outside", "take a walk", "walking to work"
+    ],
+    "outdoor sports": [
+        "football", "soccer", "cricket", "golf", "tennis", "basketball", "baseball", "rugby", "volleyball"
+    ],
+    "camping": [
+        "camping", "camp", "tent", "bonfire"
+    ],
+    "general outdoor": [
+        "outside", "outdoor", "park", "garden", "gardening", "sightseeing", "explore",
+        "outdoor activities", "outdoor activity", "go outside"
+    ],
 }
 
 VULNERABLE_KEYWORDS = {
@@ -26,22 +57,26 @@ ADVERSARIAL_PATTERNS = [
     r"ignore\s+(all\s+)?(previous\s+)?instructions",
     r"override\s+(all\s+)?(safety\s+)?(rules|sops|policy|protocol)",
     r"you\s+must\s+say\s+it\s+is\s+safe",
-    r"disregard\s+sop",
+    r"disregard\s+(the\s+)?sop",
+    r"ignore\s+(the\s+)?sop",
     r"bypass\s+safety",
     r"system\s+prompt",
     r"reveal\s+your\s+instructions",
     r"pretend\s+there\s+is\s+no\s+danger",
+    r"give\s+me\s+advice\s+even\s+if\s+there\s+is\s+no\s+sop",
     r"jailbreak",
     r"dan\s+mode",
 ]
 
 COMMON_CITIES = [
-    "london", "new york", "tokyo", "paris", "mumbai", "delhi", "bangalore", "sydney", "dubai", "singapore",
-    "berlin", "toronto", "vancouver", "san francisco", "los angeles", "chicago", "seattle", "boston",
-    "miami", "austin", "denver", "rome", "madrid", "amsterdam", "beijing", "shanghai", "hong kong",
-    "seoul", "bangkok", "istanbul", "cairo", "cape town", "auckland", "melbourne", "zurich", "geneva",
-    "vienna", "stockholm", "oslo", "helsinki", "dublin", "edinburgh", "manchester", "birmingham",
-    "hyderabad", "chennai", "kolkata", "pune", "ahmedabad", "jaipur", "calgary", "montreal"
+    "london", "new york", "tokyo", "paris", "mumbai", "delhi", "bengaluru", "bangalore",
+    "sydney", "dubai", "singapore", "berlin", "toronto", "vancouver", "san francisco",
+    "los angeles", "chicago", "seattle", "boston", "miami", "austin", "denver", "rome",
+    "madrid", "amsterdam", "beijing", "shanghai", "hong kong", "seoul", "bangkok",
+    "istanbul", "cairo", "cape town", "auckland", "melbourne", "zurich", "geneva",
+    "vienna", "stockholm", "oslo", "helsinki", "dublin", "edinburgh", "manchester",
+    "birmingham", "hyderabad", "chennai", "kolkata", "pune", "ahmedabad", "jaipur",
+    "calgary", "montreal"
 ]
 
 class IntentService:
@@ -69,7 +104,7 @@ class IntentService:
             if matched_activity:
                 break
 
-        # 3. Vulnerable / Target Demographic Groups
+        # 3. Vulnerable Demographic Groups
         matched_groups: List[str] = []
         for group, keywords in VULNERABLE_KEYWORDS.items():
             for kw in keywords:
@@ -100,45 +135,41 @@ class IntentService:
         # 5. Location Extraction
         extracted_location = None
 
-        # Check for explicit "in <City>", "at <City>", "for <City>", "near <City>", "around <City>"
         loc_patterns = [
             r"\b(?:in|at|near|around|for)\s+([A-Za-z\s]+?)(?:\s+(?:today|tomorrow|now|this|with|for|at|is|can|should|,|\.|\?|$))",
             r"\b(?:visiting|heading to|traveling to|going to)\s+([A-Za-z\s]+?)(?:\s+(?:today|tomorrow|now|this|with|for|at|is|can|should|,|\.|\?|$))",
+            r"\b(?:weather in|weather for)\s+([A-Za-z\s]+?)(?:\s+(?:today|tomorrow|now|this|,|\.|\?|$))",
         ]
 
         for pat in loc_patterns:
             match = re.search(pat, text, re.IGNORECASE)
             if match:
                 candidate = match.group(1).strip()
-                # Exclude common stop words or activity words mistaken as location
-                invalid_locs = {"the", "a", "an", "my", "our", "outdoor", "park", "morning", "afternoon", "evening", "tomorrow", "today", "now"}
+                invalid_locs = {
+                    "the", "a", "an", "my", "our", "outdoor", "park", "morning",
+                    "afternoon", "evening", "tomorrow", "today", "now", "safe",
+                    "general", "very", "extreme", "strong", "severe"
+                }
                 if candidate.lower() not in invalid_locs and len(candidate) > 2:
                     extracted_location = candidate
                     break
 
-        # If not found via regex preposition, check known cities list
         if not extracted_location:
             for city in COMMON_CITIES:
                 if re.search(rf"\b{re.escape(city)}\b", text_lower):
                     extracted_location = city.title()
                     break
 
-        # Fallback to default if provided
         final_location = extracted_location or default_location
 
-        # Clarification check
-        clarification = False
-        if not final_location:
-            clarification = True
-
         return IntentExtraction(
-            activity=matched_activity or "general outdoor",
+            activity=matched_activity,
             location=final_location,
             time_reference=time_ref or "current",
             vulnerable_groups=matched_groups,
             travel_context=None,
             adversarial_attempt=adversarial,
-            clarification_needed=clarification,
+            clarification_needed=bool(not final_location),
         )
 
 intent_service = IntentService()
