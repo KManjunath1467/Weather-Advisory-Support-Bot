@@ -1,14 +1,19 @@
-// AeroSOP App JavaScript
-
 const API_BASE = "";
 
 // Generate or retrieve persistent browser session ID
 function getSessionId() {
   let sid = localStorage.getItem("aerosop_session_id");
+
   if (!sid) {
-    sid = "session-" + Math.random().toString(36).substring(2, 10) + "-" + Date.now();
+    sid =
+      "session-" +
+      Math.random().toString(36).substring(2, 10) +
+      "-" +
+      Date.now();
+
     localStorage.setItem("aerosop_session_id", sid);
   }
+
   return sid;
 }
 
@@ -16,7 +21,11 @@ function getSessionId() {
 const state = {
   sessionId: getSessionId(),
   currentLocation: "Bengaluru",
+
+  // IMPORTANT:
+  // Do not assume an activity when the user only asks for weather.
   currentActivity: null,
+
   vulnerableGroups: [],
   activeTab: "tab-advisor",
   sopsList: [],
@@ -28,21 +37,26 @@ const state = {
 const elements = {
   tabs: document.querySelectorAll(".nav-tab"),
   tabViews: document.querySelectorAll(".tab-view"),
+
   cityInput: document.getElementById("global-city-input"),
   btnSearchCity: document.getElementById("btn-search-city"),
   btnGeoDetect: document.getElementById("btn-geo-detect"),
+
   activityChips: document.querySelectorAll(".chip-item"),
   demoCheckboxes: document.querySelectorAll(".demo-checkbox"),
-  
+
   // Weather Display Elements
   currentLocationText: document.getElementById("current-location-text"),
   liveClock: document.getElementById("live-clock"),
+
   currentTemp: document.getElementById("current-temp"),
   apparentTemp: document.getElementById("apparent-temp"),
   weatherDesc: document.getElementById("weather-description"),
   weatherIcon: document.getElementById("weather-main-icon"),
+
   tempMin: document.getElementById("temp-min"),
   tempMax: document.getElementById("temp-max"),
+
   metricWind: document.getElementById("metric-wind"),
   metricGusts: document.getElementById("metric-gusts"),
   metricPrecip: document.getElementById("metric-precip"),
@@ -51,27 +65,31 @@ const elements = {
   metricVis: document.getElementById("metric-vis"),
   metricHumidity: document.getElementById("metric-humidity"),
   metricLightning: document.getElementById("metric-lightning"),
+
   gaugeFill: document.getElementById("gauge-fill"),
   safetyScoreValue: document.getElementById("safety-score-value"),
   safetyStatusBadge: document.getElementById("safety-status-badge"),
   safetyStatusText: document.getElementById("safety-status-text"),
+
   hourlyForecastList: document.getElementById("hourly-forecast-list"),
   dailyForecastList: document.getElementById("daily-forecast-list"),
   gearItemsList: document.getElementById("gear-items-list"),
-  
+
   // SOP Alert Box
   sopAlertBadge: document.getElementById("sop-alert-badge"),
   sopAlertBody: document.getElementById("sop-alert-body"),
-  
+
   // Chat Elements
   chatMessages: document.getElementById("chat-messages"),
   advisorForm: document.getElementById("advisor-form"),
   chatUserInput: document.getElementById("chat-user-input"),
+
   btnMic: document.getElementById("btn-mic"),
   btnSpeak: document.getElementById("btn-speak-advisory"),
   btnClearChat: document.getElementById("btn-clear-chat"),
+
   suggestButtons: document.querySelectorAll(".suggest-btn"),
-  
+
   // Simulator Elements
   simActivitySelect: document.getElementById("sim-activity-select"),
   simTemp: document.getElementById("sim-temp"),
@@ -82,16 +100,19 @@ const elements = {
   simVis: document.getElementById("sim-vis"),
   simLightning: document.getElementById("sim-lightning"),
   simDemoKids: document.getElementById("sim-demo-kids"),
+
   valSimTemp: document.getElementById("val-sim-temp"),
   valSimWind: document.getElementById("val-sim-wind"),
   valSimGusts: document.getElementById("val-sim-gusts"),
   valSimPrecip: document.getElementById("val-sim-precip"),
   valSimUv: document.getElementById("val-sim-uv"),
   valSimVis: document.getElementById("val-sim-vis"),
+
   simTriggeredCount: document.getElementById("sim-triggered-count"),
   simTriggeredList: document.getElementById("sim-triggered-list"),
+
   presetButtons: document.querySelectorAll(".btn-preset"),
-  
+
   // Matrix Elements
   sopsMatrixContainer: document.getElementById("sops-matrix-container"),
   sopCountLabel: document.getElementById("sop-count-label"),
@@ -102,11 +123,16 @@ document.addEventListener("DOMContentLoaded", () => {
   initEventListeners();
   startClock();
   fetchSOPs();
+
+  // IMPORTANT:
+  // Initial request is weather-only.
+  // No activity such as cycling is automatically attached.
   loadInitialAdvisory(
     "What is the weather in Bengaluru?",
     "Bengaluru",
     null
-);
+  );
+
   runSimulation();
 });
 
@@ -114,10 +140,16 @@ document.addEventListener("DOMContentLoaded", () => {
 function startClock() {
   function update() {
     const now = new Date();
+
     if (elements.liveClock) {
-      elements.liveClock.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      elements.liveClock.textContent = now.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
     }
   }
+
   update();
   setInterval(update, 1000);
 }
@@ -133,143 +165,249 @@ function initEventListeners() {
   });
 
   // Location Search
-  elements.btnSearchCity.addEventListener("click", () => {
-    const query = elements.cityInput.value.trim();
-    if (query) {
-      handleLocationChange(query);
-    }
-  });
-
-  elements.cityInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
+  if (elements.btnSearchCity) {
+    elements.btnSearchCity.addEventListener("click", () => {
       const query = elements.cityInput.value.trim();
+
       if (query) {
         handleLocationChange(query);
       }
-    }
-  });
+    });
+  }
+
+  if (elements.cityInput) {
+    elements.cityInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const query = elements.cityInput.value.trim();
+
+        if (query) {
+          handleLocationChange(query);
+        }
+      }
+    });
+  }
 
   // Geolocation
-  elements.btnGeoDetect.addEventListener("click", () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const lat = position.coords.latitude;
-          const lon = position.coords.longitude;
-          handleLocationChange(`${lat.toFixed(2)}, ${lon.toFixed(2)}`);
-        },
-        () => {
-          alert("Could not access your location. Please type a city name.");
-        }
-      );
-    } else {
-      alert("Geolocation is not supported by your browser.");
-    }
-  });
+  if (elements.btnGeoDetect) {
+    elements.btnGeoDetect.addEventListener("click", () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
 
+            handleLocationChange(
+              `${lat.toFixed(2)}, ${lon.toFixed(2)}`
+            );
+          },
+          () => {
+            alert(
+              "Could not access your location. Please type a city name."
+            );
+          }
+        );
+      } else {
+        alert("Geolocation is not supported by your browser.");
+      }
+    });
+  }
+
+  // ============================================================
   // Activity Chips
+  // ============================================================
   elements.activityChips.forEach((chip) => {
     chip.addEventListener("click", () => {
-      elements.activityChips.forEach((c) => c.classList.remove("active"));
+      elements.activityChips.forEach((c) =>
+        c.classList.remove("active")
+      );
+
       chip.classList.add("active");
+
       state.currentActivity = chip.getAttribute("data-activity");
-      triggerAdvisoryQuery(`Check advisory for ${state.currentActivity}`);
+
+      // IMPORTANT:
+      // Explicitly pass the selected activity to the backend.
+      // This prevents the backend from receiving a missing activity.
+      if (state.currentActivity) {
+        triggerAdvisoryQuery(
+          `Check advisory for ${state.currentActivity}`,
+          null,
+          state.currentActivity
+        );
+      }
     });
   });
 
+  // ============================================================
   // Demographic Checkboxes
+  // ============================================================
   elements.demoCheckboxes.forEach((cb) => {
     cb.addEventListener("change", () => {
       state.vulnerableGroups = Array.from(elements.demoCheckboxes)
         .filter((c) => c.checked)
         .map((c) => c.value);
-      triggerAdvisoryQuery(`Check advisory for ${state.currentActivity}`);
+
+      // IMPORTANT:
+      // Do not send "Check advisory for null".
+      // Only refresh the advisory if an activity exists.
+      if (state.currentActivity) {
+        triggerAdvisoryQuery(
+          `Check advisory for ${state.currentActivity}`,
+          null,
+          state.currentActivity
+        );
+      }
     });
   });
 
+  // ============================================================
   // Chat Form Submission
-  elements.advisorForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const query = elements.chatUserInput.value.trim();
-    if (query) {
-      triggerAdvisoryQuery(query);
-      elements.chatUserInput.value = "";
-    }
-  });
+  // ============================================================
+  if (elements.advisorForm) {
+    elements.advisorForm.addEventListener("submit", (e) => {
+      e.preventDefault();
 
+      const query = elements.chatUserInput.value.trim();
+
+      if (query) {
+        // IMPORTANT:
+        // Do NOT automatically pass state.currentActivity here.
+        // Let the backend/LangGraph understand the user's new query.
+        triggerAdvisoryQuery(query);
+
+        elements.chatUserInput.value = "";
+      }
+    });
+  }
+
+  // ============================================================
   // Suggestion Chips
+  // ============================================================
   elements.suggestButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
       const q = btn.getAttribute("data-query");
+
       if (q) {
         triggerAdvisoryQuery(q);
       }
     });
   });
 
+  // ============================================================
   // Clear Chat
-  elements.btnClearChat.addEventListener("click", () => {
-    elements.chatMessages.innerHTML = `
-      <div class="chat-bubble bot-bubble">
-        <div class="bubble-header"><i class="fa-solid fa-robot"></i> <strong>AeroSOP Copilot</strong></div>
-        <div class="bubble-content">
-          <p>Conversation cleared. Ready for your next weather safety query!</p>
+  // ============================================================
+  if (elements.btnClearChat) {
+    elements.btnClearChat.addEventListener("click", () => {
+      elements.chatMessages.innerHTML = `
+        <div class="chat-bubble bot-bubble">
+          <div class="bubble-header">
+            <i class="fa-solid fa-robot"></i>
+            <strong>AeroSOP Copilot</strong>
+          </div>
+
+          <div class="bubble-content">
+            <p>
+              Conversation cleared. Ready for your next weather safety query!
+            </p>
+          </div>
         </div>
-      </div>
-    `;
-  });
+      `;
+    });
+  }
 
+  // ============================================================
   // Text-To-Speech
-  elements.btnSpeak.addEventListener("click", () => {
-    if (state.lastAdvisoryText && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const cleanText = state.lastAdvisoryText.replace(/[*_#>`~]/g, '');
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      window.speechSynthesis.speak(utterance);
-    }
-  });
+  // ============================================================
+  if (elements.btnSpeak) {
+    elements.btnSpeak.addEventListener("click", () => {
+      if (
+        state.lastAdvisoryText &&
+        "speechSynthesis" in window
+      ) {
+        window.speechSynthesis.cancel();
 
-  // Voice Input (Speech Recognition)
-  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const cleanText =
+          state.lastAdvisoryText.replace(/[\*_#>`~]/g, "");
+
+        const utterance =
+          new SpeechSynthesisUtterance(cleanText);
+
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+
+        window.speechSynthesis.speak(utterance);
+      }
+    });
+  }
+
+  // ============================================================
+  // Voice Input
+  // ============================================================
+  if (
+    "webkitSpeechRecognition" in window ||
+    "SpeechRecognition" in window
+  ) {
+    const SpeechRecognition =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
     const recognition = new SpeechRecognition();
+
     recognition.continuous = false;
     recognition.interimResults = false;
 
     recognition.onstart = () => {
       state.isListening = true;
-      elements.btnMic.classList.add("listening");
+
+      if (elements.btnMic) {
+        elements.btnMic.classList.add("listening");
+      }
     };
 
     recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
+      const transcript =
+        event.results[0][0].transcript;
+
       elements.chatUserInput.value = transcript;
+
+      // Do not automatically attach currentActivity.
       triggerAdvisoryQuery(transcript);
     };
 
     recognition.onend = () => {
       state.isListening = false;
-      elements.btnMic.classList.remove("listening");
+
+      if (elements.btnMic) {
+        elements.btnMic.classList.remove("listening");
+      }
     };
 
-    elements.btnMic.addEventListener("click", () => {
-      if (state.isListening) {
-        recognition.stop();
-      } else {
-        recognition.start();
-      }
-    });
-  } else {
+    if (elements.btnMic) {
+      elements.btnMic.addEventListener("click", () => {
+        if (state.isListening) {
+          recognition.stop();
+        } else {
+          recognition.start();
+        }
+      });
+    }
+  } else if (elements.btnMic) {
     elements.btnMic.style.display = "none";
   }
 
+  // ============================================================
   // Simulator Controls
+  // ============================================================
   const simControls = [
-    elements.simTemp, elements.simWind, elements.simGusts,
-    elements.simPrecip, elements.simUv, elements.simVis,
-    elements.simActivitySelect, elements.simLightning, elements.simDemoKids
+    elements.simTemp,
+    elements.simWind,
+    elements.simGusts,
+    elements.simPrecip,
+    elements.simUv,
+    elements.simVis,
+    elements.simActivitySelect,
+    elements.simLightning,
+    elements.simDemoKids,
   ];
 
   simControls.forEach((ctrl) => {
@@ -278,6 +416,7 @@ function initEventListeners() {
         updateSimulatorLabels();
         runSimulation();
       });
+
       ctrl.addEventListener("change", () => {
         updateSimulatorLabels();
         runSimulation();
@@ -285,17 +424,24 @@ function initEventListeners() {
     }
   });
 
+  // ============================================================
   // Simulator Presets
+  // ============================================================
   elements.presetButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
       const preset = btn.getAttribute("data-preset");
+
       applySimulatorPreset(preset);
     });
   });
 }
 
+// ============================================================
+// Tab Switching
+// ============================================================
 function switchTab(tabId) {
   state.activeTab = tabId;
+
   elements.tabs.forEach((t) => {
     if (t.getAttribute("data-tab") === tabId) {
       t.classList.add("active");
@@ -317,335 +463,955 @@ function switchTab(tabId) {
   }
 }
 
+// ============================================================
+// Location Change
+// ============================================================
 function handleLocationChange(newLocation) {
   state.currentLocation = newLocation;
-  elements.cityInput.value = newLocation;
-  triggerAdvisoryQuery(`What is the weather in ${newLocation}? Check advisory for ${state.currentActivity}`, newLocation);
+
+  if (elements.cityInput) {
+    elements.cityInput.value = newLocation;
+  }
+
+  // IMPORTANT:
+  // If there is no selected activity, ask only for weather.
+  //
+  // If the user has explicitly selected an activity,
+  // include that activity in the request.
+  const query = state.currentActivity
+    ? `What is the weather in ${newLocation}? Check advisory for ${state.currentActivity}`
+    : `What is the weather in ${newLocation}?`;
+
+  triggerAdvisoryQuery(query, newLocation);
 }
 
+// ============================================================
 // Initial Advisory Request
-async function loadInitialAdvisory(query, location, activity) {
-  await triggerAdvisoryQuery(query, location, activity);
+// ============================================================
+async function loadInitialAdvisory(
+  query,
+  location,
+  activity
+) {
+  await triggerAdvisoryQuery(
+    query,
+    location,
+    activity
+  );
 }
 
+// ============================================================
 // Trigger Advisory Chat Query using LangGraph
-async function triggerAdvisoryQuery(query, locationOverride = null, activityOverride = null) {
+// ============================================================
+async function triggerAdvisoryQuery(
+  query,
+  locationOverride = null,
+  activityOverride = null
+) {
   appendUserMessage(query);
 
-  const loadingBubble = appendBotLoadingMessage();
+  const loadingBubble =
+    appendBotLoadingMessage();
 
   try {
+    // ========================================================
+    // IMPORTANT PAYLOAD FIX
+    // ========================================================
+    //
+    // Do NOT use:
+    //
+    // activity: activityOverride || state.currentActivity
+    //
+    // because that causes every normal chat question to inherit
+    // an old activity such as "cycling".
+    //
+    // Example:
+    //
+    // User:
+    // "What is the weather in Bengaluru?"
+    //
+    // Must send:
+    // activity: null
+    //
+    // Later:
+    // "Can I go cycling?"
+    //
+    // LangGraph can determine cycling from the new message and
+    // use session memory for Bengaluru.
+    // ========================================================
+
     const payload = {
       session_id: state.sessionId,
+
       message: query,
+
       location: locationOverride || null,
+
       activity: activityOverride || null,
-      vulnerable_groups: state.vulnerableGroups,
+
+      vulnerable_groups:
+        state.vulnerableGroups || [],
     };
 
-    const res = await fetch(`${API_BASE}/api/advisor/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    console.log(
+      "Sending LangGraph request:",
+      payload
+    );
+
+    const res = await fetch(
+      `${API_BASE}/api/advisor/chat`,
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify(payload),
+      }
+    );
 
     if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      throw new Error(errData.detail || `Server status ${res.status}`);
+      const errData =
+        await res.json().catch(() => ({}));
+
+      throw new Error(
+        errData.detail ||
+          `Server status ${res.status}`
+      );
     }
 
     const data = await res.json();
+
     loadingBubble.remove();
 
     renderAdvisoryData(data);
-    appendBotAdvisoryMessage(data.response);
+
+    appendBotAdvisoryMessage(
+      data.response
+    );
 
     // Save text for speech synthesis
-    state.lastAdvisoryText = data.response;
+    state.lastAdvisoryText =
+      data.response;
 
     // Update location label if resolved
-    if (data.location && data.location.name) {
-      state.currentLocation = data.location.name;
-      elements.currentLocationText.textContent = data.location.name;
+    if (
+      data.location &&
+      data.location.name
+    ) {
+      state.currentLocation =
+        data.location.name;
+
+      if (elements.currentLocationText) {
+        elements.currentLocationText.textContent =
+          data.location.name;
+      }
     }
   } catch (err) {
     loadingBubble.remove();
-    appendBotMessage(`⚠️ Error communicating with LangGraph agent: ${err.message}.`);
+
+    appendBotMessage(
+      `⚠️ Error communicating with LangGraph agent: ${err.message}.`
+    );
   }
 }
 
+// ============================================================
 // Render Telemetry & Forecasts
+// ============================================================
 function renderAdvisoryData(data) {
   const w = data.weather;
-  const matched = data.matched_sops || [];
-  const selected = data.selected_sop;
+
+  const matched =
+    data.matched_sops || [];
+
+  const selected =
+    data.selected_sop;
 
   if (w) {
-    elements.currentTemp.textContent = Number(w.temperature).toFixed(1);
-    elements.apparentTemp.textContent = `${Number(w.apparent_temperature).toFixed(1)}°C`;
-    elements.weatherDesc.textContent = w.weather_description;
-    elements.weatherIcon.textContent = getWeatherIcon(w.weather_code);
+    if (elements.currentTemp) {
+      elements.currentTemp.textContent =
+        Number(w.temperature).toFixed(1);
+    }
 
-    elements.metricWind.textContent = `${Number(w.wind_speed).toFixed(1)} km/h`;
-    elements.metricGusts.textContent = `Gusts ${Number(w.wind_gusts).toFixed(1)} km/h`;
-    elements.metricPrecip.textContent = `${Number(w.precipitation).toFixed(1)} mm`;
-    elements.metricPrecipProb.textContent = `${Number(w.precipitation_probability).toFixed(0)}% chance`;
-    elements.metricUv.textContent = `${Number(w.uv_index).toFixed(1)} (${getUVLabel(w.uv_index)})`;
-    elements.metricVis.textContent = `${Number(w.visibility).toFixed(1)} km`;
-    elements.metricHumidity.textContent = `${Number(w.relative_humidity).toFixed(0)}%`;
-    elements.metricLightning.textContent = w.lightning_risk ? "⚡ ACTIVE RISK" : "None";
-    elements.metricLightning.style.color = w.lightning_risk ? "#ef4444" : "#f1f5f9";
+    if (elements.apparentTemp) {
+      elements.apparentTemp.textContent =
+        `${Number(
+          w.apparent_temperature
+        ).toFixed(1)}°C`;
+    }
+
+    if (elements.weatherDesc) {
+      elements.weatherDesc.textContent =
+        w.weather_description;
+    }
+
+    if (elements.weatherIcon) {
+      elements.weatherIcon.textContent =
+        getWeatherIcon(
+          w.weather_code
+        );
+    }
+
+    if (elements.metricWind) {
+      elements.metricWind.textContent =
+        `${Number(
+          w.wind_speed
+        ).toFixed(1)} km/h`;
+    }
+
+    if (elements.metricGusts) {
+      elements.metricGusts.textContent =
+        `Gusts ${Number(
+          w.wind_gusts
+        ).toFixed(1)} km/h`;
+    }
+
+    if (elements.metricPrecip) {
+      elements.metricPrecip.textContent =
+        `${Number(
+          w.precipitation
+        ).toFixed(1)} mm`;
+    }
+
+    if (elements.metricPrecipProb) {
+      elements.metricPrecipProb.textContent =
+        `${Number(
+          w.precipitation_probability
+        ).toFixed(0)}% chance`;
+    }
+
+    if (elements.metricUv) {
+      elements.metricUv.textContent =
+        `${Number(
+          w.uv_index
+        ).toFixed(1)} (${getUVLabel(
+          w.uv_index
+        )})`;
+    }
+
+    if (elements.metricVis) {
+      elements.metricVis.textContent =
+        `${Number(
+          w.visibility
+        ).toFixed(1)} km`;
+    }
+
+    if (elements.metricHumidity) {
+      elements.metricHumidity.textContent =
+        `${Number(
+          w.relative_humidity
+        ).toFixed(0)}%`;
+    }
+
+    if (elements.metricLightning) {
+      elements.metricLightning.textContent =
+        w.lightning_risk
+          ? "⚡ ACTIVE RISK"
+          : "None";
+
+      elements.metricLightning.style.color =
+        w.lightning_risk
+          ? "#ef4444"
+          : "#f1f5f9";
+    }
   }
 
+  // ==========================================================
   // Update Status and SOP Banner
+  // ==========================================================
   if (selected) {
     const sev = selected.severity;
+
     let color = "#ef4444";
-    if (sev === "HIGH") color = "#f97316";
-    else if (sev === "MEDIUM") color = "#eab308";
-    else if (sev === "LOW") color = "#3b82f6";
-    else if (sev === "ADVISORY") color = "#a855f7";
 
-    elements.safetyStatusBadge.style.background = `${color}22`;
-    elements.safetyStatusBadge.style.borderColor = color;
-    elements.safetyStatusBadge.style.color = color;
-    elements.safetyStatusText.textContent = `${sev} SAFETY DIRECTIVE`;
+    if (sev === "HIGH") {
+      color = "#f97316";
+    } else if (sev === "MEDIUM") {
+      color = "#eab308";
+    } else if (sev === "LOW") {
+      color = "#3b82f6";
+    } else if (sev === "ADVISORY") {
+      color = "#a855f7";
+    }
 
-    elements.sopAlertBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>[${selected.id}] ${selected.name}</span>`;
-    elements.sopAlertBadge.style.color = color;
+    if (elements.safetyStatusBadge) {
+      elements.safetyStatusBadge.style.background =
+        `${color}22`;
 
-    elements.sopAlertBody.innerHTML = `
-      <div class="sop-directive-box ${sev.toLowerCase()}">
-        <div class="sop-title-row">
-          <span>Priority ${selected.priority} | Severity ${selected.severity}</span>
+      elements.safetyStatusBadge.style.borderColor =
+        color;
+
+      elements.safetyStatusBadge.style.color =
+        color;
+    }
+
+    if (elements.safetyStatusText) {
+      elements.safetyStatusText.textContent =
+        `${sev} SAFETY DIRECTIVE`;
+    }
+
+    if (elements.sopAlertBadge) {
+      elements.sopAlertBadge.innerHTML = `
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span>
+          [${selected.id}] ${selected.name}
+        </span>
+      `;
+
+      elements.sopAlertBadge.style.color =
+        color;
+    }
+
+    if (elements.sopAlertBody) {
+      elements.sopAlertBody.innerHTML = `
+        <div class="sop-directive-box ${sev.toLowerCase()}">
+
+          <div class="sop-title-row">
+            <span>
+              Priority ${selected.priority}
+              |
+              Severity ${selected.severity}
+            </span>
+          </div>
+
+          <p>
+            <strong>Condition:</strong>
+            ${
+              selected.matched_reasons
+                ? selected.matched_reasons.join("; ")
+                : ""
+            }
+          </p>
+
+          <p>
+            <strong>Guideline:</strong>
+            ${selected.advisory}
+          </p>
+
+          <div class="sop-action-highlight">
+            🚨 Required Action:
+            ${selected.action}
+          </div>
+
         </div>
-        <p><strong>Condition:</strong> ${selected.matched_reasons ? selected.matched_reasons.join("; ") : ""}</p>
-        <p><strong>Guideline:</strong> ${selected.advisory}</p>
-        <div class="sop-action-highlight">🚨 Required Action: ${selected.action}</div>
-      </div>
-    `;
+      `;
+    }
   } else {
-    elements.safetyStatusBadge.style.background = `rgba(16, 185, 129, 0.15)`;
-    elements.safetyStatusBadge.style.borderColor = "#10b981";
-    elements.safetyStatusBadge.style.color = "#34d399";
-    elements.safetyStatusText.textContent = data.sop_found ? "SOP APPLIED" : "NO SOP MATCHED";
+    if (elements.safetyStatusBadge) {
+      elements.safetyStatusBadge.style.background =
+        "rgba(16, 185, 129, 0.15)";
 
-    elements.sopAlertBadge.innerHTML = `<i class="fa-solid fa-circle-info"></i> <span>STATUS NOTICE</span>`;
-    elements.sopAlertBadge.style.color = "#94a3b8";
-    elements.sopAlertBody.innerHTML = `<p>${data.response}</p>`;
+      elements.safetyStatusBadge.style.borderColor =
+        "#10b981";
+
+      elements.safetyStatusBadge.style.color =
+        "#34d399";
+    }
+
+    if (elements.safetyStatusText) {
+      elements.safetyStatusText.textContent =
+        data.sop_found
+          ? "SOP APPLIED"
+          : "NO SOP MATCHED";
+    }
+
+    if (elements.sopAlertBadge) {
+      elements.sopAlertBadge.innerHTML = `
+        <i class="fa-solid fa-circle-info"></i>
+        <span>STATUS NOTICE</span>
+      `;
+
+      elements.sopAlertBadge.style.color =
+        "#94a3b8";
+    }
+
+    if (elements.sopAlertBody) {
+      elements.sopAlertBody.innerHTML = `
+        <p>${data.response}</p>
+      `;
+    }
   }
 
   // Hourly Forecast
-  renderHourly(data.hourly_forecast);
+  renderHourly(
+    data.hourly_forecast
+  );
 
   // Daily Forecast
-  renderDaily(data.daily_forecast);
+  renderDaily(
+    data.daily_forecast
+  );
 }
 
+// ============================================================
+// Hourly Forecast
+// ============================================================
 function renderHourly(hourly) {
-  if (!elements.hourlyForecastList || !hourly) return;
-  elements.hourlyForecastList.innerHTML = "";
+  if (
+    !elements.hourlyForecastList ||
+    !hourly
+  ) {
+    return;
+  }
 
-  hourly.slice(0, 16).forEach((h) => {
-    const item = document.createElement("div");
-    item.className = "hourly-item";
-    item.innerHTML = `
-      <div class="hourly-time">${h.time}</div>
-      <div class="hourly-icon">${getWeatherIcon(h.weather_code)}</div>
-      <div class="hourly-temp">${Math.round(h.temperature)}°</div>
-      <div class="hourly-prob">${h.precip_prob}%</div>
-    `;
-    elements.hourlyForecastList.appendChild(item);
-  });
+  elements.hourlyForecastList.innerHTML =
+    "";
+
+  hourly
+    .slice(0, 16)
+    .forEach((h) => {
+      const item =
+        document.createElement("div");
+
+      item.className =
+        "hourly-item";
+
+      item.innerHTML = `
+        <div class="hourly-time">
+          ${h.time}
+        </div>
+
+        <div class="hourly-icon">
+          ${getWeatherIcon(
+            h.weather_code
+          )}
+        </div>
+
+        <div class="hourly-temp">
+          ${Math.round(
+            h.temperature
+          )}°
+        </div>
+
+        <div class="hourly-prob">
+          ${h.precip_prob}%
+        </div>
+      `;
+
+      elements.hourlyForecastList.appendChild(
+        item
+      );
+    });
 }
 
+// ============================================================
+// Daily Forecast
+// ============================================================
 function renderDaily(daily) {
-  if (!elements.dailyForecastList || !daily) return;
-  elements.dailyForecastList.innerHTML = "";
+  if (
+    !elements.dailyForecastList ||
+    !daily
+  ) {
+    return;
+  }
 
-  daily.slice(0, 6).forEach((d) => {
-    const item = document.createElement("div");
-    item.className = "daily-item";
-    const dateObj = new Date(d.date);
-    const dayName = isNaN(dateObj.getTime()) ? d.date : dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  elements.dailyForecastList.innerHTML =
+    "";
 
-    item.innerHTML = `
-      <div class="daily-date">${dayName}</div>
-      <div class="daily-icon">${getWeatherIcon(d.weather_code)}</div>
-      <div class="daily-temp-bar">
-        <span class="daily-max">${Math.round(d.temp_max)}°</span>
-        <span class="daily-min">${Math.round(d.temp_min)}°</span>
-      </div>
-      <div style="font-size:0.75rem; color:#38bdf8;">${d.precip_prob}% rain</div>
-    `;
-    elements.dailyForecastList.appendChild(item);
-  });
+  daily
+    .slice(0, 6)
+    .forEach((d) => {
+      const item =
+        document.createElement("div");
+
+      item.className =
+        "daily-item";
+
+      const dateObj =
+        new Date(d.date);
+
+      const dayName =
+        isNaN(dateObj.getTime())
+          ? d.date
+          : dateObj.toLocaleDateString(
+              "en-US",
+              {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+              }
+            );
+
+      item.innerHTML = `
+        <div class="daily-date">
+          ${dayName}
+        </div>
+
+        <div class="daily-icon">
+          ${getWeatherIcon(
+            d.weather_code
+          )}
+        </div>
+
+        <div class="daily-temp-bar">
+          <span class="daily-max">
+            ${Math.round(
+              d.temp_max
+            )}°
+          </span>
+
+          <span class="daily-min">
+            ${Math.round(
+              d.temp_min
+            )}°
+          </span>
+        </div>
+
+        <div
+          style="
+            font-size:0.75rem;
+            color:#38bdf8;
+          "
+        >
+          ${d.precip_prob}% rain
+        </div>
+      `;
+
+      elements.dailyForecastList.appendChild(
+        item
+      );
+    });
 }
 
+// ============================================================
 // Chat UI Appenders
+// ============================================================
 function appendUserMessage(text) {
-  const bubble = document.createElement("div");
-  bubble.className = "chat-bubble user-bubble";
+  const bubble =
+    document.createElement("div");
+
+  bubble.className =
+    "chat-bubble user-bubble";
+
   bubble.innerHTML = `
-    <div class="bubble-header"><i class="fa-solid fa-user"></i> <strong>You</strong></div>
-    <div class="bubble-content"><p>${escapeHtml(text)}</p></div>
+    <div class="bubble-header">
+      <i class="fa-solid fa-user"></i>
+      <strong>You</strong>
+    </div>
+
+    <div class="bubble-content">
+      <p>${escapeHtml(text)}</p>
+    </div>
   `;
-  elements.chatMessages.appendChild(bubble);
+
+  elements.chatMessages.appendChild(
+    bubble
+  );
+
   scrollChatBottom();
 }
 
 function appendBotMessage(text) {
-  const bubble = document.createElement("div");
-  bubble.className = "chat-bubble bot-bubble";
+  const bubble =
+    document.createElement("div");
+
+  bubble.className =
+    "chat-bubble bot-bubble";
+
   bubble.innerHTML = `
-    <div class="bubble-header"><i class="fa-solid fa-robot"></i> <strong>AeroSOP Copilot</strong></div>
-    <div class="bubble-content"><p>${text}</p></div>
+    <div class="bubble-header">
+      <i class="fa-solid fa-robot"></i>
+      <strong>AeroSOP Copilot</strong>
+    </div>
+
+    <div class="bubble-content">
+      <p>${text}</p>
+    </div>
   `;
-  elements.chatMessages.appendChild(bubble);
+
+  elements.chatMessages.appendChild(
+    bubble
+  );
+
   scrollChatBottom();
+
   return bubble;
 }
 
 function appendBotLoadingMessage() {
-  const bubble = document.createElement("div");
-  bubble.className = "chat-bubble bot-bubble";
+  const bubble =
+    document.createElement("div");
+
+  bubble.className =
+    "chat-bubble bot-bubble";
+
   bubble.innerHTML = `
-    <div class="bubble-header"><i class="fa-solid fa-robot"></i> <strong>AeroSOP Copilot</strong></div>
-    <div class="bubble-content"><p><i class="fa-solid fa-spinner fa-spin"></i> Executing LangGraph agent & consulting SOP rules...</p></div>
+    <div class="bubble-header">
+      <i class="fa-solid fa-robot"></i>
+      <strong>AeroSOP Copilot</strong>
+    </div>
+
+    <div class="bubble-content">
+      <p>
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        Executing LangGraph agent &
+        consulting SOP rules...
+      </p>
+    </div>
   `;
-  elements.chatMessages.appendChild(bubble);
+
+  elements.chatMessages.appendChild(
+    bubble
+  );
+
   scrollChatBottom();
+
   return bubble;
 }
 
-function appendBotAdvisoryMessage(markdownText) {
-  const bubble = document.createElement("div");
-  bubble.className = "chat-bubble bot-bubble";
-  const htmlContent = parseMarkdownToHtml(markdownText);
+function appendBotAdvisoryMessage(
+  markdownText
+) {
+  const bubble =
+    document.createElement("div");
+
+  bubble.className =
+    "chat-bubble bot-bubble";
+
+  const htmlContent =
+    parseMarkdownToHtml(
+      markdownText
+    );
 
   bubble.innerHTML = `
-    <div class="bubble-header"><i class="fa-solid fa-shield-halved"></i> <strong>LangGraph Policy Response</strong></div>
-    <div class="bubble-content">${htmlContent}</div>
+    <div class="bubble-header">
+      <i class="fa-solid fa-shield-halved"></i>
+      <strong>
+        LangGraph Policy Response
+      </strong>
+    </div>
+
+    <div class="bubble-content">
+      ${htmlContent}
+    </div>
   `;
-  elements.chatMessages.appendChild(bubble);
+
+  elements.chatMessages.appendChild(
+    bubble
+  );
+
   scrollChatBottom();
 }
 
 function scrollChatBottom() {
-  elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+  elements.chatMessages.scrollTop =
+    elements.chatMessages.scrollHeight;
 }
 
+// ============================================================
 // Simple Markdown Parser
+// ============================================================
 function parseMarkdownToHtml(md) {
-  if (!md) return "";
+  if (!md) {
+    return "";
+  }
+
   let html = md
-    .replace(/^### (.*$)/gim, '<h4>$1</h4>')
-    .replace(/^## (.*$)/gim, '<h3>$1</h3>')
-    .replace(/^# (.*$)/gim, '<h2>$1</h2>')
-    .replace(/^\> (.*$)/gim, '<blockquote>$1</blockquote>')
-    .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-    .replace(/\*(.*)\*/gim, '<em>$1</em>')
-    .replace(/`([^`]+)`/gim, '<code>$1</code>')
-    .replace(/\n\n/gim, '</p><p>')
-    .replace(/\n/gim, '<br />');
+    .replace(
+      /^### (.*)$/gim,
+      "<h4>$1</h4>"
+    )
+    .replace(
+      /^## (.*)$/gim,
+      "<h3>$1</h3>"
+    )
+    .replace(
+      /^# (.*)$/gim,
+      "<h2>$1</h2>"
+    )
+    .replace(
+      /^> (.*)$/gim,
+      "<blockquote>$1</blockquote>"
+    )
+    .replace(
+      /\*\*(.*?)\*\*/gim,
+      "<strong>$1</strong>"
+    )
+    .replace(
+      /\*(.*?)\*/gim,
+      "<em>$1</em>"
+    )
+    .replace(
+      /`([^`]+)`/gim,
+      "<code>$1</code>"
+    )
+    .replace(
+      /\n\n/gim,
+      "</p><p>"
+    )
+    .replace(
+      /\n/gim,
+      "<br />"
+    );
 
   return `<p>${html}</p>`;
 }
 
+// ============================================================
+// Escape HTML
+// ============================================================
 function escapeHtml(text) {
-  const div = document.createElement("div");
+  const div =
+    document.createElement("div");
+
   div.textContent = text;
+
   return div.innerHTML;
 }
 
+// ============================================================
 // SIMULATOR LOGIC
+// ============================================================
 function updateSimulatorLabels() {
-  elements.valSimTemp.textContent = `${parseFloat(elements.simTemp.value).toFixed(1)}°C`;
-  elements.valSimWind.textContent = `${elements.simWind.value} km/h`;
-  elements.valSimGusts.textContent = `${elements.simGusts.value} km/h`;
-  elements.valSimPrecip.textContent = `${parseFloat(elements.simPrecip.value).toFixed(1)} mm`;
-  elements.valSimUv.textContent = `${parseFloat(elements.simUv.value).toFixed(1)}`;
-  elements.valSimVis.textContent = `${parseFloat(elements.simVis.value).toFixed(1)} km`;
+  if (elements.valSimTemp) {
+    elements.valSimTemp.textContent =
+      `${parseFloat(
+        elements.simTemp.value
+      ).toFixed(1)}°C`;
+  }
+
+  if (elements.valSimWind) {
+    elements.valSimWind.textContent =
+      `${elements.simWind.value} km/h`;
+  }
+
+  if (elements.valSimGusts) {
+    elements.valSimGusts.textContent =
+      `${elements.simGusts.value} km/h`;
+  }
+
+  if (elements.valSimPrecip) {
+    elements.valSimPrecip.textContent =
+      `${parseFloat(
+        elements.simPrecip.value
+      ).toFixed(1)} mm`;
+  }
+
+  if (elements.valSimUv) {
+    elements.valSimUv.textContent =
+      `${parseFloat(
+        elements.simUv.value
+      ).toFixed(1)}`;
+  }
+
+  if (elements.valSimVis) {
+    elements.valSimVis.textContent =
+      `${parseFloat(
+        elements.simVis.value
+      ).toFixed(1)} km`;
+  }
 }
 
 let simDebounceTimer = null;
+
 function runSimulation() {
   clearTimeout(simDebounceTimer);
-  simDebounceTimer = setTimeout(async () => {
-    const act = elements.simActivitySelect.value;
-    const temp = parseFloat(elements.simTemp.value);
-    const wind = parseFloat(elements.simWind.value);
-    const gusts = parseFloat(elements.simGusts.value);
-    const precip = parseFloat(elements.simPrecip.value);
-    const uv = parseFloat(elements.simUv.value);
-    const vis = parseFloat(elements.simVis.value);
-    const lightning = elements.simLightning.checked;
-    const groups = elements.simDemoKids.checked ? ["children"] : [];
 
-    let wCode = 0;
-    if (lightning) wCode = 95;
-    else if (precip >= 10) wCode = 65;
-    else if (precip > 0.5) wCode = 61;
+  simDebounceTimer =
+    setTimeout(async () => {
+      const act =
+        elements.simActivitySelect.value;
 
-    try {
-      const res = await fetch(`${API_BASE}/api/sop/simulate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          activity: act,
-          target_groups: groups,
-          temperature: temp,
-          wind_speed: wind,
-          wind_gusts: gusts,
-          precipitation: precip,
-          uv_index: uv,
-          visibility: vis,
-          weather_code: wCode,
-          lightning_risk: lightning,
-        }),
-      });
+      const temp =
+        parseFloat(
+          elements.simTemp.value
+        );
 
-      if (!res.ok) throw new Error("Simulation failed");
-      const data = await res.json();
-      renderSimulationResults(data);
-    } catch (e) {
-      console.error(e);
-    }
-  }, 80);
+      const wind =
+        parseFloat(
+          elements.simWind.value
+        );
+
+      const gusts =
+        parseFloat(
+          elements.simGusts.value
+        );
+
+      const precip =
+        parseFloat(
+          elements.simPrecip.value
+        );
+
+      const uv =
+        parseFloat(
+          elements.simUv.value
+        );
+
+      const vis =
+        parseFloat(
+          elements.simVis.value
+        );
+
+      const lightning =
+        elements.simLightning.checked;
+
+      const groups =
+        elements.simDemoKids.checked
+          ? ["children"]
+          : [];
+
+      let wCode = 0;
+
+      if (lightning) {
+        wCode = 95;
+      } else if (precip >= 10) {
+        wCode = 65;
+      } else if (precip > 0.5) {
+        wCode = 61;
+      }
+
+      try {
+        const res =
+          await fetch(
+            `${API_BASE}/api/sop/simulate`,
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body: JSON.stringify({
+                activity: act,
+                target_groups:
+                  groups,
+                temperature: temp,
+                wind_speed: wind,
+                wind_gusts: gusts,
+                precipitation: precip,
+                uv_index: uv,
+                visibility: vis,
+                weather_code: wCode,
+                lightning_risk:
+                  lightning,
+              }),
+            }
+          );
+
+        if (!res.ok) {
+          throw new Error(
+            "Simulation failed"
+          );
+        }
+
+        const data =
+          await res.json();
+
+        renderSimulationResults(
+          data
+        );
+      } catch (e) {
+        console.error(e);
+      }
+    }, 80);
 }
 
+// ============================================================
+// Render Simulation Results
+// ============================================================
 function renderSimulationResults(data) {
-  elements.simTriggeredCount.textContent = `${data.matched_count} SOP${data.matched_count === 1 ? '' : 's'} Triggered`;
-  elements.simTriggeredList.innerHTML = "";
+  if (elements.simTriggeredCount) {
+    elements.simTriggeredCount.textContent =
+      `${data.matched_count} SOP${
+        data.matched_count === 1
+          ? ""
+          : "s"
+      } Triggered`;
+  }
+
+  if (!elements.simTriggeredList) {
+    return;
+  }
+
+  elements.simTriggeredList.innerHTML =
+    "";
 
   if (data.matched_count === 0) {
     elements.simTriggeredList.innerHTML = `
       <div class="sim-empty-state">
         <i class="fa-solid fa-shield-heart"></i>
-        <h4>Nominal Operating Conditions</h4>
-        <p>No adverse safety rules triggered for <strong>${data.activity}</strong> under these environmental parameters.</p>
+
+        <h4>
+          Nominal Operating Conditions
+        </h4>
+
+        <p>
+          No adverse safety rules
+          triggered for
+          <strong>${data.activity}</strong>
+          under these environmental
+          parameters.
+        </p>
       </div>
     `;
+
     return;
   }
 
   data.matched_sops.forEach((sop) => {
-    const card = document.createElement("div");
-    card.className = `sim-sop-card sev-${sop.severity}`;
+    const card =
+      document.createElement("div");
+
+    card.className =
+      `sim-sop-card sev-${sop.severity}`;
+
     card.innerHTML = `
       <div class="sim-sop-header">
-        <span class="sim-sop-id">${sop.id}: ${sop.name}</span>
-        <span class="sim-sop-badge">${sop.severity} (Priority ${sop.priority})</span>
+
+        <span class="sim-sop-id">
+          ${sop.id}: ${sop.name}
+        </span>
+
+        <span class="sim-sop-badge">
+          ${sop.severity}
+          (Priority ${sop.priority})
+        </span>
+
       </div>
-      <div class="sim-sop-triggers"><strong>Matched Conditions:</strong> ${sop.reasons.join("; ")}</div>
-      <div class="sim-sop-advisory"><strong>Directive:</strong> ${sop.advisory}</div>
-      <div style="font-weight:700; color:#fff; margin-top:0.4rem;">🚨 Required Action: ${sop.action}</div>
+
+      <div class="sim-sop-triggers">
+        <strong>
+          Matched Conditions:
+        </strong>
+
+        ${sop.reasons.join("; ")}
+      </div>
+
+      <div class="sim-sop-advisory">
+        <strong>
+          Directive:
+        </strong>
+
+        ${sop.advisory}
+      </div>
+
+      <div
+        style="
+          font-weight:700;
+          color:#fff;
+          margin-top:0.4rem;
+        "
+      >
+        🚨 Required Action:
+        ${sop.action}
+      </div>
     `;
-    elements.simTriggeredList.appendChild(card);
+
+    elements.simTriggeredList.appendChild(
+      card
+    );
   });
 }
 
-function applySimulatorPreset(preset) {
+// ============================================================
+// Simulator Presets
+// ============================================================
+function applySimulatorPreset(
+  preset
+) {
   if (preset === "thunderstorm") {
     elements.simTemp.value = 22;
     elements.simWind.value = 45;
@@ -653,7 +1419,8 @@ function applySimulatorPreset(preset) {
     elements.simPrecip.value = 20;
     elements.simUv.value = 1;
     elements.simVis.value = 2;
-    elements.simLightning.checked = true;
+    elements.simLightning.checked =
+      true;
   } else if (preset === "heatwave") {
     elements.simTemp.value = 42;
     elements.simWind.value = 10;
@@ -661,7 +1428,8 @@ function applySimulatorPreset(preset) {
     elements.simPrecip.value = 0;
     elements.simUv.value = 11;
     elements.simVis.value = 10;
-    elements.simLightning.checked = false;
+    elements.simLightning.checked =
+      false;
   } else if (preset === "highwind") {
     elements.simTemp.value = 16;
     elements.simWind.value = 48;
@@ -669,7 +1437,8 @@ function applySimulatorPreset(preset) {
     elements.simPrecip.value = 2;
     elements.simUv.value = 3;
     elements.simVis.value = 8;
-    elements.simLightning.checked = false;
+    elements.simLightning.checked =
+      false;
   } else if (preset === "freezing") {
     elements.simTemp.value = -14;
     elements.simWind.value = 30;
@@ -677,7 +1446,8 @@ function applySimulatorPreset(preset) {
     elements.simPrecip.value = 0.5;
     elements.simUv.value = 1;
     elements.simVis.value = 4;
-    elements.simLightning.checked = false;
+    elements.simLightning.checked =
+      false;
   } else if (preset === "clear") {
     elements.simTemp.value = 23;
     elements.simWind.value = 12;
@@ -685,90 +1455,235 @@ function applySimulatorPreset(preset) {
     elements.simPrecip.value = 0;
     elements.simUv.value = 4.5;
     elements.simVis.value = 12;
-    elements.simLightning.checked = false;
+    elements.simLightning.checked =
+      false;
   }
+
   updateSimulatorLabels();
   runSimulation();
 }
 
+// ============================================================
 // Fetch and Render SOP Matrix
+// ============================================================
 async function fetchSOPs() {
   try {
-    const res = await fetch(`${API_BASE}/api/sops`);
+    const res =
+      await fetch(
+        `${API_BASE}/api/sops`
+      );
+
     if (res.ok) {
-      const data = await res.json();
-      state.sopsList = data.sops;
+      const data =
+        await res.json();
+
+      state.sopsList =
+        data.sops;
+
       if (elements.sopCountLabel) {
-        elements.sopCountLabel.textContent = `${data.total} Active SOPs`;
+        elements.sopCountLabel.textContent =
+          `${data.total} Active SOPs`;
       }
-      renderSOPMatrix(data.sops);
+
+      renderSOPMatrix(
+        data.sops
+      );
     }
   } catch (e) {
-    console.error("Failed to load SOPs:", e);
+    console.error(
+      "Failed to load SOPs:",
+      e
+    );
   }
 }
 
+// ============================================================
+// Render SOP Matrix
+// ============================================================
 function renderSOPMatrix(sops) {
-  if (!elements.sopsMatrixContainer) return;
-  elements.sopsMatrixContainer.innerHTML = "";
+  if (
+    !elements.sopsMatrixContainer
+  ) {
+    return;
+  }
+
+  elements.sopsMatrixContainer.innerHTML =
+    "";
 
   sops.forEach((sop) => {
-    const card = document.createElement("div");
-    card.className = "matrix-sop-card";
+    const card =
+      document.createElement("div");
 
-    const actPills = sop.activities.map((a) => `<span class="matrix-act-pill">${a}</span>`).join("");
-    const condJson = JSON.stringify(sop.conditions, null, 2);
+    card.className =
+      "matrix-sop-card";
+
+    const actPills =
+      sop.activities
+        .map(
+          (a) =>
+            `<span class="matrix-act-pill">${a}</span>`
+        )
+        .join("");
+
+    const condJson =
+      JSON.stringify(
+        sop.conditions,
+        null,
+        2
+      );
 
     card.innerHTML = `
       <div class="matrix-card-top">
-        <span class="matrix-sop-id">${sop.id}</span>
-        <span class="sim-sop-badge" style="background:${getSeverityBadgeBg(sop.severity)}; color:${getSeverityBadgeText(sop.severity)};">
-          ${sop.severity} | Priority ${sop.priority}
+
+        <span class="matrix-sop-id">
+          ${sop.id}
         </span>
+
+        <span
+          class="sim-sop-badge"
+          style="
+            background:${getSeverityBadgeBg(
+              sop.severity
+            )};
+            color:${getSeverityBadgeText(
+              sop.severity
+            )};
+          "
+        >
+          ${sop.severity}
+          |
+          Priority ${sop.priority}
+        </span>
+
       </div>
-      <div class="matrix-sop-name">${sop.name}</div>
-      <div class="matrix-category-tag">Category: ${sop.category}</div>
-      <div class="matrix-activities-wrap">${actPills}</div>
-      <pre class="matrix-condition-code"><code>${condJson}</code></pre>
+
+      <div class="matrix-sop-name">
+        ${sop.name}
+      </div>
+
+      <div class="matrix-category-tag">
+        Category:
+        ${sop.category}
+      </div>
+
+      <div class="matrix-activities-wrap">
+        ${actPills}
+      </div>
+
+      <pre class="matrix-condition-code">
+<code>${condJson}</code>
+      </pre>
+
       <div class="matrix-action-box">
-        <strong>Mandatory Directive:</strong> ${sop.advisory}
+        <strong>
+          Mandatory Directive:
+        </strong>
+
+        ${sop.advisory}
       </div>
     `;
-    elements.sopsMatrixContainer.appendChild(card);
+
+    elements.sopsMatrixContainer.appendChild(
+      card
+    );
   });
 }
 
-function getSeverityBadgeBg(sev) {
-  if (sev === "CRITICAL") return "rgba(239, 68, 68, 0.2)";
-  if (sev === "HIGH") return "rgba(249, 115, 22, 0.2)";
-  if (sev === "MEDIUM") return "rgba(234, 179, 8, 0.2)";
+// ============================================================
+// Severity Helpers
+// ============================================================
+function getSeverityBadgeBg(
+  sev
+) {
+  if (sev === "CRITICAL") {
+    return "rgba(239, 68, 68, 0.2)";
+  }
+
+  if (sev === "HIGH") {
+    return "rgba(249, 115, 22, 0.2)";
+  }
+
+  if (sev === "MEDIUM") {
+    return "rgba(234, 179, 8, 0.2)";
+  }
+
   return "rgba(59, 130, 246, 0.2)";
 }
 
-function getSeverityBadgeText(sev) {
-  if (sev === "CRITICAL") return "#fca5a5";
-  if (sev === "HIGH") return "#fdba74";
-  if (sev === "MEDIUM") return "#fde047";
+function getSeverityBadgeText(
+  sev
+) {
+  if (sev === "CRITICAL") {
+    return "#fca5a5";
+  }
+
+  if (sev === "HIGH") {
+    return "#fdba74";
+  }
+
+  if (sev === "MEDIUM") {
+    return "#fde047";
+  }
+
   return "#93c5fd";
 }
 
+// ============================================================
+// Weather Icon
+// ============================================================
 function getWeatherIcon(code) {
   const icons = {
-    0: "☀️", 1: "🌤️", 2: "⛅", 3: "☁️",
-    45: "🌫️", 48: "🌫️",
-    51: "🌦️", 53: "🌦️", 55: "🌧️",
-    61: "🌦️", 63: "🌧️", 65: "🌧️",
-    71: "🌨️", 73: "🌨️", 75: "❄️",
-    80: "🌦️", 81: "🌧️", 82: "⛈️",
-    95: "⚡", 96: "⛈️", 99: "⛈️"
+    0: "☀️",
+    1: "🌤️",
+    2: "⛅",
+    3: "☁️",
+
+    45: "🌫️",
+    48: "🌫️",
+
+    51: "🌦️",
+    53: "🌦️",
+    55: "🌧️",
+
+    61: "🌦️",
+    63: "🌧️",
+    65: "🌧️",
+
+    71: "🌨️",
+    73: "🌨️",
+    75: "❄️",
+
+    80: "🌦️",
+    81: "🌧️",
+    82: "⛈️",
+
+    95: "⚡",
+    96: "⛈️",
+    99: "⛈️",
   };
+
   return icons[code] || "🌤️";
 }
 
+// ============================================================
+// UV Label
+// ============================================================
 function getUVLabel(uv) {
-  if (uv <= 2) return "Low";
-  if (uv <= 5) return "Mod";
-  if (uv <= 7) return "High";
-  if (uv <= 10) return "Very High";
+  if (uv <= 2) {
+    return "Low";
+  }
+
+  if (uv <= 5) {
+    return "Mod";
+  }
+
+  if (uv <= 7) {
+    return "High";
+  }
+
+  if (uv <= 10) {
+    return "Very High";
+  }
+
   return "Extreme";
 }
