@@ -16,7 +16,7 @@ function getSessionId() {
 const state = {
   sessionId: getSessionId(),
   currentLocation: "Bengaluru",
-  currentActivity: "cycling",
+  currentActivity: null,
   vulnerableGroups: [],
   activeTab: "tab-advisor",
   sopsList: [],
@@ -102,7 +102,11 @@ document.addEventListener("DOMContentLoaded", () => {
   initEventListeners();
   startClock();
   fetchSOPs();
-  loadInitialAdvisory("What is the weather in Bengaluru? Can I go cycling?", "Bengaluru", "cycling");
+  loadInitialAdvisory(
+    "What is the weather in Bengaluru?",
+    "Bengaluru",
+    null
+);
   runSimulation();
 });
 
@@ -335,7 +339,7 @@ async function triggerAdvisoryQuery(query, locationOverride = null, activityOver
       session_id: state.sessionId,
       message: query,
       location: locationOverride || null,
-      activity: activityOverride || state.currentActivity,
+      activity: activityOverride || null,
       vulnerable_groups: state.vulnerableGroups,
     };
 
