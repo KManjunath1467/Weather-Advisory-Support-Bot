@@ -104,6 +104,19 @@ class IntentService:
             if matched_activity:
                 break
 
+        if not matched_activity:
+            try:
+                from backend.graph.agent import sop_engine
+                for sop in sop_engine.get_all_sops():
+                    for act in sop.activities:
+                        if re.search(rf"\b{re.escape(act.lower())}\b", text_lower):
+                            matched_activity = act.lower()
+                            break
+                    if matched_activity:
+                        break
+            except Exception:
+                pass
+
         # 3. Vulnerable Demographic Groups
         matched_groups: List[str] = []
         for group, keywords in VULNERABLE_KEYWORDS.items():
@@ -136,23 +149,29 @@ class IntentService:
         extracted_location = None
 
         loc_patterns = [
-            r"\b(?:in|at|near|around|for)\s+([A-Za-z\s]+?)(?:\s+(?:today|tomorrow|now|this|with|for|at|is|can|should|,|\.|\?|$))",
-            r"\b(?:visiting|heading to|traveling to|going to)\s+([A-Za-z\s]+?)(?:\s+(?:today|tomorrow|now|this|with|for|at|is|can|should|,|\.|\?|$))",
-            r"\b(?:weather in|weather for)\s+([A-Za-z\s]+?)(?:\s+(?:today|tomorrow|now|this|,|\.|\?|$))",
+            r"\b(?:weather in|weather for)\s+([A-Za-z\s]+?)(?:\s+(?:today|tomorrow|now|this)|\s*[,.?!]|\s*$)",
+            r"\b(?:visiting|heading to|traveling to|going to)\s+([A-Za-z\s]+?)(?:\s+(?:today|tomorrow|now|this|with|for|at|is|can|should)|\s*[,.?!]|\s*$)",
+            r"\b(?:in|at|near|around)\s+([A-Za-z\s]+?)(?:\s+(?:today|tomorrow|now|this|with|for|at|is|can|should)|\s*[,.?!]|\s*$)",
+            r"\bfor\s+([A-Za-z\s]+?)(?:\s+(?:today|tomorrow|now|this|with|for|at|is|can|should)|\s*[,.?!]|\s*$)",
         ]
 
+        invalid_locs = {
+            "the", "a", "an", "my", "our", "outdoor", "park", "morning",
+            "afternoon", "evening", "tomorrow", "today", "now", "safe",
+            "general", "very", "extreme", "strong", "severe"
+        }
+
         for pat in loc_patterns:
-            match = re.search(pat, text, re.IGNORECASE)
-            if match:
+            for match in re.finditer(pat, text, re.IGNORECASE):
                 candidate = match.group(1).strip()
-                invalid_locs = {
-                    "the", "a", "an", "my", "our", "outdoor", "park", "morning",
-                    "afternoon", "evening", "tomorrow", "today", "now", "safe",
-                    "general", "very", "extreme", "strong", "severe"
-                }
+                words = candidate.lower().split()
                 if candidate.lower() not in invalid_locs and len(candidate) > 2:
+                    if words and words[0] in {"a", "an", "the", "my", "our"}:
+                        continue
                     extracted_location = candidate
                     break
+            if extracted_location:
+                break
 
         if not extracted_location:
             for city in COMMON_CITIES:

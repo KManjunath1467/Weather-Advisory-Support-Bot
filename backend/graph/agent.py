@@ -26,8 +26,10 @@ async def understand_question_node(state: AdvisorState) -> Dict[str, Any]:
     session_id = state.get("session_id", "default")
     session = session_store.get_or_create(session_id)
 
+    initial_loc = state.get("location") or session.location
+
     # Extract intent from text
-    intent = intent_service.extract_intent(query, default_location=session.location)
+    intent = intent_service.extract_intent(query, default_location=initial_loc)
     
     # If no activity in query, check if session had an active activity
     if not intent.activity and session.activity:
@@ -40,10 +42,12 @@ async def understand_question_node(state: AdvisorState) -> Dict[str, Any]:
     elif session.vulnerable_groups:
         intent.vulnerable_groups = session.vulnerable_groups
 
+    final_loc = intent.location or initial_loc
+
     return {
         "intent": intent.model_dump(),
         "adversarial_attempt": intent.adversarial_attempt,
-        "location": intent.location,
+        "location": final_loc,
     }
 
 async def adversarial_error_node(state: AdvisorState) -> Dict[str, Any]:
@@ -201,20 +205,18 @@ async def resolve_conflicts_node(state: AdvisorState) -> Dict[str, Any]:
     sorted_sops = sorted(
         matched,
         key=lambda s: (
-            s["priority"],
-            SEVERITY_WEIGHTS.get(s["severity"], 0),
-            -ord(s["id"][-1]) if s["id"] else 0
-        ),
-        reverse=True,
+            -int(s.get("priority", 0)),
+            -SEVERITY_WEIGHTS.get(s.get("severity", ""), 0),
+            str(s.get("id", ""))
+        )
     )
 
     primary = sorted_sops[0]
     conflict_note = None
     if len(sorted_sops) > 1:
-        other_ids = [s["id"] for s in sorted_sops[1:]]
         conflict_note = (
             f"Multiple SOPs triggered ({', '.join([s['id'] for s in sorted_sops])}). "
-            f"SOP '{primary['id']}' ({primary['name']}) takes precedence due to higher priority ({primary['priority']}) and severity ({primary['severity']})."
+            f"SOP '{primary['id']}' ({primary['name']}) takes precedence (Priority: {primary['priority']}, Severity: {primary['severity']})."
         )
 
     return {

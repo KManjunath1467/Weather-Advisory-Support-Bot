@@ -33,8 +33,8 @@ class SOPEngine:
 
         raw_sops = data.get("sops", [])
         self.sops = [SOPDefinition(**sop_dict) for sop_dict in raw_sops]
-        # Sort SOPs by priority descending
-        self.sops.sort(key=lambda s: (s.priority, SEVERITY_WEIGHTS.get(s.severity, 0)), reverse=True)
+        # Deterministic sort: Priority (descending) -> Severity Weight (descending) -> SOP ID (ascending)
+        self.sops.sort(key=lambda s: (-s.priority, -SEVERITY_WEIGHTS.get(s.severity, 0), str(s.id)))
 
     def get_all_sops(self) -> List[SOPDefinition]:
         return self.sops
@@ -227,9 +227,9 @@ class SOPEngine:
 
         results.sort(
             key=lambda r: (
-                r.sop.priority,
-                SEVERITY_WEIGHTS.get(r.sop.severity, 0)
-            ),
-            reverse=True,
+                -r.sop.priority,
+                -SEVERITY_WEIGHTS.get(r.sop.severity, 0),
+                str(r.sop.id)
+            )
         )
         return results
