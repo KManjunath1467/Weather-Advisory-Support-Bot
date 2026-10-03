@@ -1,4 +1,5 @@
 import asyncio
+import sys
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 from backend.main import app
@@ -7,8 +8,14 @@ from backend.graph.state import AdvisorState
 from backend.memory.session_store import session_store
 from backend.services.weather_service import weather_service
 
-client = TestClient(app)
+# Handle Windows console encoding
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
+client = TestClient(app)
 results_summary = []
 
 def record_result(name, user_input, expected, condition, actual, passed, explanation=""):
@@ -46,6 +53,8 @@ async def run_all_evaluations():
             "longitude": -87.6298,
             "weather": {
                 "location_name": "Chicago, USA",
+                "latitude": 41.8781,
+                "longitude": -87.6298,
                 "temperature": 15.0,
                 "apparent_temperature": 14.0,
                 "wind_speed": 45.0,
@@ -68,7 +77,7 @@ async def run_all_evaluations():
         actual = f"Matched {res.get('selected_sop', {}).get('id')} ({res.get('selected_sop', {}).get('name')})"
         record_result("TEST 1: Clear SOP Case #1 (Cycling High Wind)", state["user_query"], "Select SOP-03 (Strong Wind Cycling)", "SOP-03 triggered and cited", actual, passed)
     except Exception as e:
-        record_result("TEST 1: Clear SOP Case #1 (Cycling High Wind)", "Cycling Chicago", "SOP-03", "SOP-03", str(e), False, str(e))
+        record_result("TEST 1: Clear SOP Case #1", "Cycling Chicago", "SOP-03", "SOP-03", str(e), False, str(e))
 
     # TEST 2: Clear SOP Case #2
     try:
@@ -81,6 +90,8 @@ async def run_all_evaluations():
             "longitude": -104.9903,
             "weather": {
                 "location_name": "Denver, USA",
+                "latitude": 39.7392,
+                "longitude": -104.9903,
                 "temperature": 8.0,
                 "apparent_temperature": 5.0,
                 "wind_speed": 50.0,
@@ -138,7 +149,7 @@ async def run_all_evaluations():
         geo = await weather_service.geocode("London")
         w_obj, _ = await weather_service.get_weather(geo["latitude"], geo["longitude"], geo["name"])
         passed = w_obj is not None and isinstance(w_obj.temperature, float)
-        actual = f"Live Open-Meteo response: {w_obj.location_name}, Temp: {w_obj.temperature}°C, Wind: {w_obj.wind_speed} km/h"
+        actual = f"Live Open-Meteo response: {w_obj.location_name}, Temp: {w_obj.temperature}C, Wind: {w_obj.wind_speed} km/h"
         record_result("TEST 5: Severe LIVE Weather Case (Real Open-Meteo API)", "Geocode & fetch London", "Live weather retrieved directly from Open-Meteo", "Non-null live response", actual, passed)
     except Exception as e:
         record_result("TEST 5: Severe LIVE Weather Case", "London API", "Live weather", "Success", str(e), False, str(e))
@@ -154,6 +165,8 @@ async def run_all_evaluations():
             "longitude": 2.3522,
             "weather": {
                 "location_name": "Paris, France",
+                "latitude": 48.8566,
+                "longitude": 2.3522,
                 "temperature": 21.0,
                 "apparent_temperature": 21.0,
                 "wind_speed": 10.0,
@@ -230,6 +243,8 @@ async def run_all_evaluations():
             "longitude": -80.1918,
             "weather": {
                 "location_name": "Miami, USA",
+                "latitude": 25.7617,
+                "longitude": -80.1918,
                 "temperature": 28.0,
                 "apparent_temperature": 32.0,
                 "wind_speed": 48.0,
@@ -266,9 +281,11 @@ async def run_all_evaluations():
             "longitude": -0.1278,
             "weather": {
                 "location_name": "London, UK",
-                "temperature": 10.0,
+                "latitude": 51.5074,
+                "longitude": -0.1278,
+                "temperature": 10.0, # <= 12.0 C
                 "apparent_temperature": 8.0,
-                "wind_speed": 28.0,
+                "wind_speed": 28.0, # >= 25 km/h
                 "wind_gusts": 35.0,
                 "wind_chill": 8.0,
                 "relative_humidity": 70.0,

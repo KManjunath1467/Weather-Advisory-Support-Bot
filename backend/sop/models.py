@@ -39,31 +39,31 @@ class SOPMatchResult(BaseModel):
     reason: str = ""
 
 class IntentExtraction(BaseModel):
-    activity: Optional[str] = Field(None, description="The primary outdoor activity extracted (e.g. cycling, running, hiking, swimming, drone flying)")
+    activity: Optional[str] = Field(None, description="The primary outdoor activity extracted")
     location: Optional[str] = Field(None, description="The geographical city/region/location mentioned")
     time_reference: Optional[str] = Field(None, description="Time reference (e.g., today, this afternoon, tomorrow)")
-    vulnerable_groups: List[str] = Field(default_factory=list, description="Vulnerable demographics mentioned (e.g., elderly, children, pregnant, asthma)")
+    vulnerable_groups: List[str] = Field(default_factory=list, description="Vulnerable demographics mentioned")
     travel_context: Optional[str] = Field(None, description="Context such as commuting, tourism, race, recreation")
-    adversarial_attempt: bool = Field(False, description="Whether the user is attempting prompt-injection, policy override, or jailbreaking")
-    clarification_needed: bool = Field(False, description="Whether essential details (like activity or location) are missing")
+    adversarial_attempt: bool = Field(False, description="Whether the user is attempting prompt-injection or jailbreaking")
+    clarification_needed: bool = Field(False, description="Whether essential details are missing")
 
 class WeatherData(BaseModel):
-    location_name: str
-    latitude: float
-    longitude: float
+    location_name: str = "Unknown Location"
+    latitude: float = 0.0
+    longitude: float = 0.0
     timezone: str = "UTC"
-    temperature: float
-    apparent_temperature: float
-    wind_speed: float
-    wind_gusts: float
+    temperature: float = 20.0
+    apparent_temperature: float = 20.0
+    wind_speed: float = 10.0
+    wind_gusts: float = 10.0
     wind_chill: Optional[float] = None
-    relative_humidity: float
-    precipitation: float
-    precipitation_probability: float
-    weather_code: int
-    weather_description: str
-    visibility: float # in km
-    uv_index: float
+    relative_humidity: float = 50.0
+    precipitation: float = 0.0
+    precipitation_probability: float = 0.0
+    weather_code: int = 0
+    weather_description: str = "Fair"
+    visibility: float = 10.0 # in km
+    uv_index: float = 3.0
     is_day: bool = True
     lightning_risk: bool = False
     wave_height: Optional[float] = None

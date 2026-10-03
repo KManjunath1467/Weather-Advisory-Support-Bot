@@ -14,7 +14,6 @@ client = TestClient(app)
 @pytest.mark.asyncio
 async def test_1_clear_sop_cycling_wind():
     session_id = "test-session-1"
-    # Simulated weather state with 45 km/h wind
     state: AdvisorState = {
         "session_id": session_id,
         "user_query": "Is it safe to go cycling in Chicago?",
@@ -24,6 +23,8 @@ async def test_1_clear_sop_cycling_wind():
         "longitude": -87.6298,
         "weather": {
             "location_name": "Chicago, USA",
+            "latitude": 41.8781,
+            "longitude": -87.6298,
             "temperature": 15.0,
             "apparent_temperature": 14.0,
             "wind_speed": 45.0,
@@ -60,6 +61,8 @@ async def test_2_clear_sop_mountain_hiking():
         "longitude": -104.9903,
         "weather": {
             "location_name": "Denver, USA",
+            "latitude": 39.7392,
+            "longitude": -104.9903,
             "temperature": 8.0,
             "apparent_temperature": 5.0,
             "wind_speed": 50.0,
@@ -91,7 +94,6 @@ async def test_3_paraphrased_intent_bike():
         "user_query": "Can I take my bike out for a ride in Seattle?",
         "location_resolved": False,
     }
-    # Test understand_question node
     result = await advisor_graph.ainvoke(state)
     assert result["intent"]["activity"] == "cycling"
 
@@ -110,7 +112,6 @@ async def test_4_paraphrased_intent_jog():
 # ----------------- TEST 5: Severe LIVE Weather Case (Real Open-Meteo Call) -----------------
 @pytest.mark.asyncio
 async def test_5_severe_live_weather_call():
-    # Make a real live call to Open-Meteo for a major global city
     geo = await weather_service.geocode("London")
     assert geo is not None
     assert "latitude" in geo
@@ -129,7 +130,6 @@ async def test_5_severe_live_weather_call():
 @pytest.mark.asyncio
 async def test_6_no_sop_case():
     session_id = "test-session-6"
-    # Normal mild weather with no adverse triggers for walking
     state: AdvisorState = {
         "session_id": session_id,
         "user_query": "Can I go walking in Paris?",
@@ -139,6 +139,8 @@ async def test_6_no_sop_case():
         "longitude": 2.3522,
         "weather": {
             "location_name": "Paris, France",
+            "latitude": 48.8566,
+            "longitude": 2.3522,
             "temperature": 21.0,
             "apparent_temperature": 21.0,
             "wind_speed": 10.0,
@@ -238,7 +240,6 @@ async def test_10_session_memory():
 @pytest.mark.asyncio
 async def test_11_multiple_matching_sops_conflict_resolution():
     session_id = "test-session-11"
-    # Severe weather: Both Thunderstorm (SOP-01, Priority 100) and Strong Wind (SOP-03, Priority 80) match
     state: AdvisorState = {
         "session_id": session_id,
         "user_query": "Can I go cycling in Miami?",
@@ -248,6 +249,8 @@ async def test_11_multiple_matching_sops_conflict_resolution():
         "longitude": -80.1918,
         "weather": {
             "location_name": "Miami, USA",
+            "latitude": 25.7617,
+            "longitude": -80.1918,
             "temperature": 28.0,
             "apparent_temperature": 32.0,
             "wind_speed": 48.0,
@@ -268,7 +271,6 @@ async def test_11_multiple_matching_sops_conflict_resolution():
     result = await advisor_graph.ainvoke(state)
     assert result["sop_found"] is True
     assert len(result["matched_sops"]) >= 2
-    # SOP-01 has priority 100 > SOP-03 priority 80
     assert result["selected_sop"]["id"] == "SOP-01"
     assert result["conflict_resolution"] is not None
     assert "SOP-01" in result["conflict_resolution"]
@@ -277,7 +279,6 @@ async def test_11_multiple_matching_sops_conflict_resolution():
 @pytest.mark.asyncio
 async def test_12_eleventh_sop_picnic():
     session_id = "test-session-12"
-    # Chilly windy conditions for a family picnic triggering SOP-11
     state: AdvisorState = {
         "session_id": session_id,
         "user_query": "Can I take my kids for a picnic in the park in London?",
@@ -287,6 +288,8 @@ async def test_12_eleventh_sop_picnic():
         "longitude": -0.1278,
         "weather": {
             "location_name": "London, UK",
+            "latitude": 51.5074,
+            "longitude": -0.1278,
             "temperature": 10.0, # <= 12.0 C
             "apparent_temperature": 8.0,
             "wind_speed": 28.0, # >= 25 km/h

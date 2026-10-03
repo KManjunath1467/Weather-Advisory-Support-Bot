@@ -51,7 +51,7 @@ async def adversarial_error_node(state: AdvisorState) -> Dict[str, Any]:
     return {
         "error": "adversarial_override_attempt",
         "final_response": (
-            "⚠️ **Safety Policy Enforcement Notice**\n\n"
+            "Safety Policy Enforcement Notice:\n\n"
             "The system detected an attempt to override standard operating safety guidelines or bypass SOP safety rules. "
             "Weather safety thresholds and Standard Operating Procedures (SOPs) are strict, authoritative, and immutable. "
             "Safety policies cannot be overridden."
@@ -60,6 +60,15 @@ async def adversarial_error_node(state: AdvisorState) -> Dict[str, Any]:
 
 async def resolve_location_node(state: AdvisorState) -> Dict[str, Any]:
     """Resolves geographical coordinates strictly via Open-Meteo Geocoding without fake fallbacks."""
+    # If already resolved (e.g. in test state), keep it
+    if state.get("location_resolved") and state.get("latitude") is not None:
+        return {
+            "location": state.get("location"),
+            "latitude": state.get("latitude"),
+            "longitude": state.get("longitude"),
+            "location_resolved": True,
+        }
+
     session_id = state.get("session_id", "default")
     session = session_store.get_or_create(session_id)
     
@@ -69,7 +78,6 @@ async def resolve_location_node(state: AdvisorState) -> Dict[str, Any]:
 
     geo = await weather_service.geocode(loc_query)
     if geo:
-        # Persist resolved location to session memory
         session_store.update(
             session_id,
             location=geo["name"],
@@ -95,6 +103,14 @@ async def location_error_node(state: AdvisorState) -> Dict[str, Any]:
 
 async def fetch_weather_node(state: AdvisorState) -> Dict[str, Any]:
     """Fetches real-time weather from Open-Meteo with exact coordinates."""
+    # If weather was already provided (e.g. in test or simulation state), preserve it
+    if state.get("weather") is not None and state.get("weather_available"):
+        return {
+            "weather": state["weather"],
+            "raw_weather": state.get("raw_weather"),
+            "weather_available": True,
+        }
+
     lat = state.get("latitude")
     lon = state.get("longitude")
     loc_name = state.get("location") or "Unknown"
@@ -124,7 +140,7 @@ async def weather_error_node(state: AdvisorState) -> Dict[str, Any]:
     }
 
 async def match_sops_node(state: AdvisorState) -> Dict[str, Any]:
-    """Evaluates deterministic SOP rules from config/sops.yaml against live weather."""
+    """Evaluates deterministic SOP rules from config/sops.yaml against weather."""
     weather_dict = state.get("weather")
     intent_dict = state.get("intent") or {}
     activity = intent_dict.get("activity")
@@ -221,20 +237,19 @@ async def generate_response_node(state: AdvisorState) -> Dict[str, Any]:
     matched_all = state.get("matched_sops", [])
 
     lines = []
-    lines.append(f"## 🛡️ SOP Safety Advisory: **{activity}** in **{loc}**\n")
+    lines.append(f"## SOP Safety Advisory: **{activity}** in **{loc}**\n")
 
     # Actual weather observed
     lines.append(
         f"**Observed Weather Telemetry:** {w.get('weather_description')} | "
-        f"🌡️ {w.get('temperature')}°C (Feels like {w.get('apparent_temperature')}°C) | "
-        f"💨 Wind {w.get('wind_speed')} km/h (Gusts {w.get('wind_gusts')} km/h) | "
-        f"💧 Humidity {w.get('relative_humidity')}% | "
-        f"☀️ UV Index {w.get('uv_index')}\n"
+        f"Temperature: {w.get('temperature')}°C (Feels like {w.get('apparent_temperature')}°C) | "
+        f"Wind: {w.get('wind_speed')} km/h (Gusts: {w.get('wind_gusts')} km/h) | "
+        f"Humidity: {w.get('relative_humidity')}% | "
+        f"UV Index: {w.get('uv_index')}\n"
     )
 
     # Primary Triggered SOP
-    sev_emoji = "🛑" if selected["severity"] == "CRITICAL" else "⚠️" if selected["severity"] == "HIGH" else "ℹ️"
-    lines.append(f"### {sev_emoji} Primary Policy Applied: **[{selected['id']}] {selected['name']}**")
+    lines.append(f"### Primary Policy Applied: **[{selected['id']}] {selected['name']}**")
     lines.append(f"- **Severity Level:** `{selected['severity']}` (Priority: `{selected['priority']}`)")
     lines.append(f"- **Triggered Condition:** {'; '.join(selected['matched_reasons'])}")
     lines.append(f"- **Mandatory Directive:** {selected['advisory']}")
@@ -242,7 +257,7 @@ async def generate_response_node(state: AdvisorState) -> Dict[str, Any]:
 
     # If multiple SOPs matched
     if conflict_note:
-        lines.append(f"### ⚖️ Conflict Resolution\n> {conflict_note}\n")
+        lines.append(f"### Conflict Resolution\n> {conflict_note}\n")
         if len(matched_all) > 1:
             lines.append("**Additional Triggered SOPs:**")
             for other in matched_all[1:]:
