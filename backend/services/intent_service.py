@@ -161,11 +161,38 @@ class IntentService:
             "general", "very", "extreme", "strong", "severe"
         }
 
+        # IMPORTANT:
+        # A phrase such as "Can I go for cycling?" matches the generic
+        # location pattern "for <...>" and can otherwise incorrectly turn
+        # "cycling" into the location. Never treat an activity name or one
+        # of its known variants as a location.
+        activity_location_words = {
+            canonical.lower()
+            for canonical in ACTIVITY_KEYWORDS
+        }
+        for variants in ACTIVITY_KEYWORDS.values():
+            activity_location_words.update(v.lower() for v in variants)
+
         for pat in loc_patterns:
             for match in re.finditer(pat, text, re.IGNORECASE):
                 candidate = match.group(1).strip()
-                words = candidate.lower().split()
-                if candidate.lower() not in invalid_locs and len(candidate) > 2:
+                candidate_lower = candidate.lower()
+                words = candidate_lower.split()
+
+                # Reject activity-only candidates such as "cycling",
+                # "bike ride", "jogging", "hiking", etc.
+                if candidate_lower in activity_location_words:
+                    continue
+
+                # Also reject candidates that are made entirely from
+                # activity words, e.g. "go for a bike ride".
+                if words and all(
+                    word in activity_location_words or word in {"a", "an", "the", "go", "for", "my"}
+                    for word in words
+                ):
+                    continue
+
+                if candidate_lower not in invalid_locs and len(candidate) > 2:
                     if words and words[0] in {"a", "an", "the", "my", "our"}:
                         continue
                     extracted_location = candidate

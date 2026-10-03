@@ -44,6 +44,16 @@ async def understand_question_node(state: AdvisorState) -> Dict[str, Any]:
 
     final_loc = intent.location or initial_loc
 
+    # Defensive guard: an activity must never be interpreted as a location.
+    # Example: "Can I go for cycling?" must resolve cycling as the activity
+    # and reuse the previous/session location.
+    if (
+        intent.activity
+        and final_loc
+        and final_loc.strip().lower() == intent.activity.strip().lower()
+    ):
+        final_loc = initial_loc
+
     return {
         "intent": intent.model_dump(),
         "adversarial_attempt": intent.adversarial_attempt,
