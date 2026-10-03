@@ -623,6 +623,22 @@ async function triggerAdvisoryQuery(
 function renderAdvisoryData(data) {
   const w = data.weather;
 
+  // Update displayed location from the backend response
+if (data.location) {
+    const locationName =
+        data.location.name ||
+        data.location.display_name ||
+        data.location.city;
+
+    if (locationName) {
+        state.currentLocation = locationName;
+
+        if (elements.currentLocationText) {
+            elements.currentLocationText.textContent = locationName;
+        }
+    }
+}
+
   const matched =
     data.matched_sops || [];
 
