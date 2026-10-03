@@ -191,18 +191,52 @@ async def match_sops_node(state: AdvisorState) -> Dict[str, Any]:
 async def no_sop_response_node(state: AdvisorState) -> Dict[str, Any]:
     """
     Handles cases where no SOP matches.
-    Strictly outputs an explicit no-SOP message with NO fabricated generic advice.
+
+    If the user only asked for weather and no activity was identified,
+    return the live weather information without inventing safety advice.
+
+    If an activity was identified, explicitly report that no SOP applies.
     """
-    intent_dict = state.get("intent") or {}
-    activity = intent_dict.get("activity") or "this activity"
-    loc = state.get("location") or "the area"
-    w = state.get("weather") or {}
-    
-    w_desc = f"Temperature: {w.get('temperature')}°C, Wind: {w.get('wind_speed')} km/h, Weather: {w.get('weather_description', 'Fair')}"
+
+    intent = state.get("intent") or {}
+    activity = intent.get("activity")
+
+    location = state.get("location") or "the requested location"
+    weather = state.get("weather") or {}
+
+    temperature = weather.get("temperature")
+    wind_speed = weather.get("wind_speed")
+    weather_description = weather.get(
+        "weather_description",
+        "Unknown"
+    )
+
+    # Weather-only query
+    if not activity:
+        return {
+            "error": None,
+            "sop_found": False,
+            "final_response": (
+                f"Current weather in {location}: "
+                f"Temperature: {temperature}°C, "
+                f"Wind: {wind_speed} km/h, "
+                f"Conditions: {weather_description}."
+            ),
+        }
+
+    # Activity query with no matching SOP
     return {
         "error": None,
         "sop_found": False,
-        "final_response": f"No applicable SOP was found for {activity} under the current weather conditions in {loc} ({w_desc}). I therefore cannot provide a policy-backed safety recommendation.",
+        "final_response": (
+            f"No applicable SOP was found for {activity} "
+            f"under the current weather conditions in {location} "
+            f"(Temperature: {temperature}°C, "
+            f"Wind: {wind_speed} km/h, "
+            f"Weather: {weather_description}). "
+            f"I therefore cannot provide a policy-backed "
+            f"safety recommendation."
+        ),
     }
 
 async def resolve_conflicts_node(state: AdvisorState) -> Dict[str, Any]:
