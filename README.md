@@ -6,30 +6,41 @@ An AI-powered Weather-Advisory Support Bot built with **LangGraph StateGraph**, 
 
 ## 📋 Table of Contents
 1. [Project Overview](#1-project-overview)
-2. [Assignment Objective](#2-assignment-objective)
-3. [Architecture](#3-architecture)
-4. [LangGraph Agent Architecture](#4-langgraph-agent-architecture)
-5. [Graph Nodes](#5-graph-nodes)
-6. [Conditional Branches & Routing](#6-conditional-branches--routing)
-7. [Session Memory](#7-session-memory)
-8. [Open-Meteo Integration](#8-open-meteo-integration)
-9. [SOP Architecture](#9-sop-architecture)
-10. [SOP Conflict Resolution](#10-sop-conflict-resolution)
-11. [No-SOP Behavior](#11-no-sop-behavior)
-12. [Weather Failure Behavior](#12-weather-failure-behavior)
-13. [Location Failure Behavior](#13-location-failure-behavior)
-14. [Adversarial Input & Prompt Injection Defense](#14-adversarial-input--prompt-injection-defense)
-15. [Project Structure](#15-project-structure)
-16. [Setup Instructions](#16-setup-instructions)
-17. [Environment Variables](#17-environment-variables)
-18. [Backend Run Instructions](#18-backend-run-instructions)
-19. [Frontend Run Instructions](#19-frontend-run-instructions)
-20. [API Examples](#20-api-examples)
-21. [Testing](#21-testing)
-22. [Evaluation Suite](#22-evaluation-suite)
-23. [Evaluation Results](#23-evaluation-results)
-24. [How to Add an 11th SOP Without Modifying Control Flow](#24-how-to-add-an-11th-sop-without-modifying-control-flow)
-25. [Known Limitations](#25-known-limitations)
+2. [Deployment](#2-deployment)
+3. [Assignment Objective](#2-assignment-objective)
+4. [Architecture](#3-architecture)
+5. [LangGraph Agent Architecture](#4-langgraph-agent-architecture)
+6. [Graph Nodes](#5-graph-nodes)
+7. [Conditional Branches & Routing](#6-conditional-branches--routing)
+8. [Session Memory](#7-session-memory)
+9. [Open-Meteo Integration](#8-open-meteo-integration)
+10. [SOP Architecture](#9-sop-architecture)
+11. [SOP Conflict Resolution](#10-sop-conflict-resolution)
+12. [No-SOP Behavior](#11-no-sop-behavior)
+13. [Weather Failure Behavior](#12-weather-failure-behavior)
+14. [Location Failure Behavior](#13-location-failure-behavior)
+15. [Adversarial Input & Prompt Injection Defense](#14-adversarial-input--prompt-injection-defense)
+16. [Project Structure](#15-project-structure)
+17. [Setup Instructions](#16-setup-instructions)
+18. [Environment Variables](#17-environment-variables)
+19. [Backend Run Instructions](#18-backend-run-instructions)
+20. [Frontend Run Instructions](#19-frontend-run-instructions)
+21. [API Examples](#20-api-examples)
+22. [Testing](#21-testing)
+23. [Evaluation Suite](#22-evaluation-suite)
+24. [Evaluation Results](#23-evaluation-results)
+25. [How to Add an 11th SOP Without Modifying Control Flow](#24-how-to-add-an-11th-sop-without-modifying-control-flow)
+26. [Known Limitations](#25-known-limitations)
+
+---
+
+## 2. Deployment
+
+The Weather-Advisory Support Bot is deployed and available online at:
+
+**Live Deployment:** [https://weather-advisory-support-bot-6v04.onrender.com/](https://weather-advisory-support-bot-6v04.onrender.com/)
+
+The deployed application provides the same LangGraph-based weather advisory workflow, live Open-Meteo weather integration, session memory, and deterministic SOP evaluation described in this README.
 
 ---
 
