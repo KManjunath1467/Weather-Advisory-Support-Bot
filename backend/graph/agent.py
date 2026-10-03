@@ -31,11 +31,30 @@ async def understand_question_node(state: AdvisorState) -> Dict[str, Any]:
     # Extract intent from text
     intent = intent_service.extract_intent(query, default_location=initial_loc)
     
-    # If no activity in query, check if session had an active activity
-    if not intent.activity and session.activity:
-        intent.activity = session.activity
+    # Respect an explicitly supplied activity first.
+    explicit_activity = state.get("activity")
+    if explicit_activity:
+        intent.activity = explicit_activity
+        session_store.update(session_id, activity=explicit_activity)
     elif intent.activity:
+        # A newly detected activity becomes the active activity for
+        # subsequent advisory questions in this session.
         session_store.update(session_id, activity=intent.activity)
+    elif session.activity:
+        # Do not silently carry an old activity into an explicit
+        # weather-only request. This is important for queries such as
+        # "What is the weather in Bengaluru?" after a cycling advisory.
+        weather_only_markers = (
+            "weather", "temperature", "forecast", "wind", "rain",
+            "precipitation", "humidity", "uv index", "uv",
+            "how hot", "how cold", "weather like"
+        )
+        is_weather_only = any(
+            marker in query.lower() for marker in weather_only_markers
+        ) and not intent.activity
+
+        if not is_weather_only:
+            intent.activity = session.activity
 
     if intent.vulnerable_groups:
         session_store.update(session_id, vulnerable_groups=intent.vulnerable_groups)

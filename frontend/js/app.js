@@ -298,6 +298,11 @@ function initEventListeners() {
   // ============================================================
   if (elements.btnClearChat) {
     elements.btnClearChat.addEventListener("click", () => {
+      state.currentActivity = null;
+      elements.activityChips.forEach((chip) =>
+        chip.classList.remove("active")
+      );
+
       elements.chatMessages.innerHTML = `
         <div class="chat-bubble bot-bubble">
           <div class="bubble-header">
@@ -587,6 +592,28 @@ async function triggerAdvisoryQuery(
 
     renderAdvisoryData(data);
 
+    // Keep the activity chips synchronized with the actual request.
+    // Weather-only requests must not leave an old activity highlighted.
+    const returnedActivity =
+      data.intent && data.intent.activity
+        ? data.intent.activity
+        : null;
+
+    if (!returnedActivity) {
+      state.currentActivity = null;
+      elements.activityChips.forEach((chip) =>
+        chip.classList.remove("active")
+      );
+    } else {
+      state.currentActivity = returnedActivity;
+      elements.activityChips.forEach((chip) => {
+        chip.classList.toggle(
+          "active",
+          chip.getAttribute("data-activity") === returnedActivity
+        );
+      });
+    }
+
     appendBotAdvisoryMessage(
       data.response
     );
@@ -623,21 +650,27 @@ async function triggerAdvisoryQuery(
 function renderAdvisoryData(data) {
   const w = data.weather;
 
-  // Update displayed location from the backend response
-if (data.location) {
-    const locationName =
-        data.location.name ||
-        data.location.display_name ||
-        data.location.city;
+  // Update displayed location from the backend response.
+  // The chat endpoint returns location as a string, while the
+  // standalone weather endpoint returns a location object.
+  let locationName = null;
 
-    if (locationName) {
-        state.currentLocation = locationName;
+  if (typeof data.location === "string") {
+    locationName = data.location;
+  } else if (data.location) {
+    locationName =
+      data.location.name ||
+      data.location.display_name ||
+      data.location.city;
+  }
 
-        if (elements.currentLocationText) {
-            elements.currentLocationText.textContent = locationName;
-        }
+  if (locationName) {
+    state.currentLocation = locationName;
+
+    if (elements.currentLocationText) {
+      elements.currentLocationText.textContent = locationName;
     }
-}
+  }
 
   const matched =
     data.matched_sops || [];
@@ -815,6 +848,11 @@ if (data.location) {
       `;
     }
   } else {
+    const activity =
+      data.intent && data.intent.activity
+        ? data.intent.activity
+        : null;
+
     if (elements.safetyStatusBadge) {
       elements.safetyStatusBadge.style.background =
         "rgba(16, 185, 129, 0.15)";
@@ -828,15 +866,15 @@ if (data.location) {
 
     if (elements.safetyStatusText) {
       elements.safetyStatusText.textContent =
-        data.sop_found
-          ? "SOP APPLIED"
-          : "NO SOP MATCHED";
+        activity
+          ? (data.sop_found ? "SOP APPLIED" : "NO SOP MATCHED")
+          : "LIVE WEATHER";
     }
 
     if (elements.sopAlertBadge) {
       elements.sopAlertBadge.innerHTML = `
         <i class="fa-solid fa-circle-info"></i>
-        <span>STATUS NOTICE</span>
+        <span>${activity ? "STATUS NOTICE" : "WEATHER STATUS"}</span>
       `;
 
       elements.sopAlertBadge.style.color =
