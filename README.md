@@ -343,7 +343,7 @@ python evaluate.py
 
 ## 23. Evaluation Results
 
-All 12 evaluation test cases pass with 100% compliance:
+All 12 evaluation test cases passed in the latest evaluation run.
 
 | Test Case | Description | Expected Behavior | Status |
 |---|---|---|---|
